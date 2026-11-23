@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Haru English Pet</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- Local bundled Cubism 4 Core + PixiJS v6 + pixi-live2d-display -->
+  <script src="vendor/live2dcubismcore.min.js"></script>
+  <script src="vendor/pixi.min.js"></script>
+  <script src="vendor/cubism4.min.js"></script>
+</head>
+<body>
+  <div id="desktop-stage">
+    <!-- Pet Anchor Container (Positioned freely on desktop, draggable) -->
+    <div id="pet-anchor" class="hit-zone">
+      <!-- Live2D Canvas -->
+      <div id="pet-canvas-wrap">
+        <canvas id="live2d-canvas"></canvas>
+        <div id="pet-loading" class="pet-loading">
+          <div class="spinner"></div>
+          <span>Loading Haru...</span>
+        </div>
+        <div id="pet-sparkle-layer"></div>
+      </div>
+
+      <!-- Pet-Adjacent Floating Side Dock (桌宠旁边的托盘) -->
+      <div id="side-dock" class="side-dock hit-zone" title="Haru 快捷托盘">
+        <button class="dock-btn" data-panel="chat" title="English Chat & Translate (英语对话/翻译)">
+          <span class="dock-icon">💬</span>
+          <span class="dock-label">Chat</span>
+        </button>
+        <button class="dock-btn" data-panel="actions" title="Expressions & Motions in English (表情动作英文)">
+          <span class="dock-icon">🎭</span>
+          <span class="dock-label">Act</span>
+        </button>
+        <button class="dock-btn" id="dock-mic-btn" title="Voice-to-Text Talk (语音对话)">
+          <span class="dock-icon">🎤</span>
+          <span class="dock-label">Talk</span>
+        </button>
+        <button class="dock-btn" id="dock-quiz-btn" title="Quick Word Quiz (单词测试)">
+          <span class="dock-icon">📝</span>
+          <span class="dock-label">Quiz</span>
+        </button>
+        <button class="dock-btn" data-panel="words" title="Weak Words & Knowledge (不熟练词库/知识库)">
+          <span class="dock-icon">📚</span>
+          <span class="dock-label">Words</span>
+        </button>
+        <button class="dock-btn" data-panel="settings" title="Settings & Cloud Sync (API/音色/云端设置)">
+          <span class="dock-icon">⚙️</span>
+          <span class="dock-label">Set</span>
+        </button>
+      </div>
+
+      <!-- Floating Speech Bubble (Above Haru) -->
+      <div id="speech-bubble" class="speech-bubble hidden hit-zone">
+        <div class="bubble-header">
+          <span id="bubble-badge" class="bubble-badge">Haru</span>
+          <div class="bubble-actions">
+            <button id="bubble-speak-btn" class="icon-mini-btn" title="Replay Voice">🔊</button>
+            <button id="bubble-close-btn" class="icon-mini-btn" title="Close">✕</button>
+          </div>
+        </div>
+        <div id="bubble-en" class="bubble-en"></div>
+        <div id="bubble-zh" class="bubble-zh"></div>
+        <div id="bubble-extra" class="bubble-extra hidden"></div>
+      </div>
+
+      <!-- Actions & Expressions English Panel (桌宠旁边的英文表情动作托盘) -->
+      <div id="actions-panel" class="floating-card actions-panel hidden hit-zone">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🎭 Expressions &amp; Actions</div>
+            <div class="card-sub">Click any English word — Haru acts &amp; speaks!</div>
+          </div>
+          <button class="close-btn" data-close="actions">✕</button>
+        </div>
+        <div class="actions-tabs">
+          <button class="pill-tab active" data-act-tab="all">All (16)</button>
+          <button class="pill-tab" data-act-tab="expression">Expressions</button>
+          <button class="pill-tab" data-act-tab="motion">Motions</button>
+        </div>
+        <div id="actions-grid" class="actions-grid"></div>
+        <div id="action-preview-bar" class="action-preview-bar hidden">
+          <div class="ap-word-row">
+            <strong id="ap-word"></strong>
+            <span id="ap-phonetic" class="phonetic"></span>
+            <button id="ap-save-weak" class="mini-tag-btn">+ Weak Words</button>
+          </div>
+          <div id="ap-meaning" class="ap-meaning"></div>
+          <div id="ap-example" class="ap-example"></div>
+        </div>
+      </div>
+
+      <!-- Floating English Chat & Translator Panel (英语对话与翻译框) -->
+      <div id="chat-panel" class="floating-card chat-panel hidden hit-zone">
+        <div class="card-header">
+          <div class="chat-mode-switch">
+            <button class="mode-btn active" data-chat-mode="chat">💬 Chat</button>
+            <button class="mode-btn" data-chat-mode="translate">🌐 Translate</button>
+          </div>
+          <div class="header-right-tools">
+            <span id="chat-level-pill" class="level-pill" title="Current English Level">B1</span>
+            <span id="study-time-pill" class="time-pill" title="Today / Total Study Time">0m</span>
+            <button id="chat-clear-btn" class="icon-mini-btn" title="Clear Chat">🗑️</button>
+            <button class="close-btn" data-close="chat">✕</button>
+          </div>
+        </div>
+
+        <div id="chat-messages" class="chat-messages"></div>
+
+        <div id="stt-status-bar" class="stt-status-bar hidden">
+          <span class="rec-dot"></span>
+          <span id="stt-status-text">Listening... Speak English now</span>
+          <button id="stt-stop-btn" class="mini-tag-btn danger">Stop</button>
+        </div>
+
+        <div class="chat-input-bar">
+          <button id="chat-mic-btn" class="mic-btn" title="Speech to Text (语音转文字)">🎤</button>
+          <textarea id="chat-input" rows="1" placeholder="Say something in English... (Enter to send)"></textarea>
+          <button id="chat-send-btn" class="send-btn" title="Send">➤</button>
+        </div>
+      </div>
+
+      <!-- Proactive Idle / Manual Word Quiz Card -->
+      <div id="quiz-panel" class="floating-card quiz-panel hidden hit-zone">
+        <div class="card-header">
+          <div>
+            <div class="card-title">📝 English Word Quiz</div>
+            <div id="quiz-progress-text" class="card-sub">Question 1 / 4 · Level B1</div>
+          </div>
+          <button class="close-btn" data-close="quiz">✕</button>
+        </div>
+        <div id="quiz-body" class="quiz-body"></div>
+      </div>
+    </div>
+
+    <!-- Center Modal: Weak Words & Knowledge Base (不熟练英文 & 英文知识库) -->
+    <div id="words-modal" class="center-modal hidden hit-zone">
+      <div class="modal-header">
+        <div class="modal-tabs">
+          <button class="modal-tab active" data-words-tab="weak">📚 不熟练的英文 (Weak Words)</button>
+          <button class="modal-tab" data-words-tab="knowledge">📖 英文知识库 (Knowledge Base)</button>
+          <button class="modal-tab" data-words-tab="stats">🏆 学习统计 (Stats)</button>
+        </div>
+        <button class="close-btn" data-close="words">✕</button>
+      </div>
+
+      <!-- Tab 1: Weak Words -->
+      <div id="tab-weak" class="modal-body">
+        <div class="toolbar-row">
+          <input id="weak-search" type="text" class="text-input" placeholder="搜索单词或释义..." />
+          <select id="weak-filter" class="select-input">
+            <option value="unmastered">待巩固</option>
+            <option value="all">全部</option>
+            <option value="mastered">已掌握</option>
+          </select>
+          <button id="btn-quiz-weak" class="primary-btn">🎯 专攻测验</button>
+          <button id="btn-toggle-add-weak" class="secondary-btn">+ 手动添加</button>
+        </div>
+
+        <div id="add-weak-form" class="inline-form hidden">
+          <input id="new-weak-word" class="text-input" placeholder="English word / phrase" />
+          <input id="new-weak-phonetic" class="text-input" placeholder="音标 (可选) e.g. /həˈloʊ/" />
+          <input id="new-weak-meaning" class="text-input" placeholder="中文释义" />
+          <input id="new-weak-example" class="text-input" placeholder="例句 (可选)" />
+          <button id="btn-save-weak" class="primary-btn">保存</button>
+        </div>
+
+        <div id="weak-words-list" class="list-scroll"></div>
+      </div>
+
+      <!-- Tab 2: Extensible Knowledge Base -->
+      <div id="tab-knowledge" class="modal-body hidden">
+        <div class="toolbar-row">
+          <button id="btn-toggle-import-pack" class="primary-btn">+ 导入 / 新建英文知识包</button>
+          <button id="btn-open-knowledge-dir" class="secondary-btn">📂 打开知识库目录</button>
+        </div>
+
+        <div id="import-pack-form" class="import-box hidden">
+          <div class="form-grid-2">
+            <input id="pack-name" class="text-input" placeholder="知识包名称 (如: 雅思高频词 / 日常口语)" />
+            <select id="pack-level" class="select-input">
+              <option value="A1">A1 入门</option>
+              <option value="A2">A2 基础</option>
+              <option value="B1" selected>B1 中级</option>
+              <option value="B2">B2 中高级</option>
+              <option value="C1">C1 高级</option>
+              <option value="C2">C2 精通</option>
+            </select>
+          </div>
+          <input id="pack-desc" class="text-input" placeholder="简介 (可选)" />
+          <textarea id="pack-bulk-text" rows="5" class="textarea-input" placeholder="每行一条，支持格式：
+word | 中文释义 | 音标(可选) | 例句(可选)
+或直接粘贴 JSON 数组 [{&quot;word&quot;:&quot;...&quot;,&quot;meaning&quot;:&quot;...&quot;,&quot;example&quot;:&quot;...&quot;}]"></textarea>
+          <div class="toolbar-row">
+            <label class="secondary-btn file-label">
+              📄 从本地文件读取 (.json/.txt/.csv)
+              <input id="pack-file-input" type="file" accept=".json,.txt,.csv" hidden />
+            </label>
+            <button id="btn-save-pack" class="primary-btn">保存知识包</button>
+            <button id="btn-cancel-pack" class="secondary-btn">取消</button>
+          </div>
+        </div>
+
+        <div id="knowledge-packs-list" class="list-scroll"></div>
+      </div>
+
+      <!-- Tab 3: Study Stats -->
+      <div id="tab-stats" class="modal-body hidden">
+        <div id="stats-dashboard" class="stats-grid"></div>
+      </div>
+    </div>
+
+    <!-- Center Modal: Settings (API / Voice / Size / Activity / Cloud Sync) -->
+    <div id="settings-modal" class="center-modal hidden hit-zone">
+      <div class="modal-header">
+        <div class="modal-tabs">
+          <button class="modal-tab active" data-set-tab="general">🎀 桌宠与学习</button>
+          <button class="modal-tab" data-set-tab="api">🤖 自定义 API</button>
+          <button class="modal-tab" data-set-tab="voice">🔊 语音与音色</button>
+          <button class="modal-tab" data-set-tab="cloud">☁️ 云端同步</button>
+        </div>
+        <button class="close-btn" data-close="settings">✕</button>
+      </div>
+
+      <!-- General Tab -->
+      <div id="set-tab-general" class="modal-body form-scroll">
+        <div class="setting-row">
+          <label>桌宠大小 (Pet Size): <strong id="lbl-scale">100%</strong></label>
+          <input id="set-scale" type="range" min="0.6" max="1.8" step="0.05" value="1.0" />
+        </div>
+        <div class="setting-row">
+          <label>活跃度 (Activity Level — 控制待机动作与主动单词测试频率)</label>
+          <select id="set-activity" class="select-input">
+            <option value="quiet">静谧 Quiet (每 25 分钟待机触发测验)</option>
+            <option value="normal">适中 Normal (每 12 分钟待机触发测验)</option>
+            <option value="lively">活跃 Lively (每 5 分钟待机触发测验)</option>
+            <option value="super">超活跃 Super Active (每 2 分钟待机触发测验)</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label>英语水平 (CEFR Level — 决定对话难度与单词测试范围)</label>
+          <select id="set-level" class="select-input">
+            <option value="A1">A1 入门 (Beginner)</option>
+            <option value="A2">A2 基础 (Elementary)</option>
+            <option value="B1">B1 中级 (Intermediate)</option>
+            <option value="B2">B2 中高级 (Upper-Intermediate)</option>
+            <option value="C1">C1 高级 (Advanced)</option>
+            <option value="C2">C2 精通 (Mastery)</option>
+          </select>
+        </div>
+        <div class="setting-checks">
+          <label><input id="set-topmost" type="checkbox" /> 窗口始终置顶 (Always on Top)</label>
+          <label><input id="set-lock" type="checkbox" /> 锁定桌宠位置 (Lock Position)</label>
+          <label><input id="set-zh-sub" type="checkbox" /> 对话与气泡显示中文辅助翻译</label>
+          <label><input id="set-auto-speak" type="checkbox" /> 自动朗读 Haru 的英文回复</label>
+          <label><input id="set-idle-quiz" type="checkbox" /> 待机过久自动弹出单词小测验</label>
+          <label><input id="set-hourly-praise" type="checkbox" /> 每学习满 1 小时提示并夸奖</label>
+          <label><input id="set-absence-remind" type="checkbox" /> 多日未学习时主动提醒</label>
+        </div>
+        <div class="setting-row">
+          <label>Live2D 模型地址 (Model3 JSON URL)</label>
+          <input id="set-model-url" class="text-input" />
+        </div>
+      </div>
+
+      <!-- API Tab -->
+      <div id="set-tab-api" class="modal-body form-scroll hidden">
+        <div class="setting-row">
+          <label>快捷预设 (OpenAI 兼容接口)</label>
+          <select id="set-api-preset" class="select-input">
+            <option value="openai">OpenAI 官方 (api.openai.com)</option>
+            <option value="deepseek">DeepSeek (api.deepseek.com)</option>
+            <option value="siliconflow">硅基流动 SiliconFlow</option>
+            <option value="gemini">Google Gemini (OpenAI 兼容端点)</option>
+            <option value="ollama">Ollama 本地部署 (localhost:11434)</option>
+            <option value="custom">自定义兼容接口 (Custom)</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label>API Base URL</label>
+          <input id="set-api-url" class="text-input" placeholder="https://api.openai.com/v1" />
+        </div>
+        <div class="setting-row">
+          <label>API Key</label>
+          <input id="set-api-key" type="password" class="text-input" placeholder="sk-..." />
+        </div>
+        <div class="form-grid-2">
+          <div class="setting-row">
+            <label>对话 / 翻译模型 (Chat Model)</label>
+            <input id="set-api-model" class="text-input" placeholder="gpt-4o-mini / deepseek-chat" />
+          </div>
+          <div class="setting-row">
+            <label>语音转文字模型 (Whisper Model)</label>
+            <input id="set-whisper-model" class="text-input" placeholder="whisper-1" />
+          </div>
+        </div>
+        <div class="toolbar-row">
+          <button id="btn-test-api" class="secondary-btn">🧪 测试 API 连接</button>
+          <span id="api-test-status" class="status-text"></span>
+        </div>
+      </div>
+
+      <!-- Voice Tab -->
+      <div id="set-tab-voice" class="modal-body form-scroll hidden">
+        <div class="setting-row">
+          <label>语音合成引擎 (TTS Provider)</label>
+          <select id="set-tts-provider" class="select-input">
+            <option value="edge">Microsoft Edge 神经网络音色 (免费高质量，自动回退)</option>
+            <option value="openai">OpenAI 兼容 TTS API (/audio/speech)</option>
+            <option value="webspeech">系统本地语音 (完全离线)</option>
+          </select>
+        </div>
+        <div class="setting-row" id="row-edge-voice">
+          <label>选择音色 (精选 9 款高辨识度多口音神经网络音色)</label>
+          <select id="set-edge-voice" class="select-input">
+            <option value="en-US-AnaNeural">🎀 Ana — 甜美动漫少女童音 (US Sweet Anime)</option>
+            <option value="en-US-AvaMultilingualNeural">✨ Ava — 自然知性美式女声 (US Multilingual 中英流畅)</option>
+            <option value="en-GB-SoniaNeural">☕ Sonia — 优雅伦敦英式女声 (UK BBC Accent)</option>
+            <option value="en-IE-EmilyNeural">☘️ Emily — 轻灵爱尔兰女声 (Irish Accent)</option>
+            <option value="en-IN-NeerjaNeural">🪷 Neerja — 清晰印度英语女声 (Indian Accent 听力实战)</option>
+            <option value="en-US-BrianMultilingualNeural">🎙️ Brian — 温暖美式播客男声 (US Male 中英流畅)</option>
+            <option value="en-GB-RyanNeural">🎩 Ryan — 绅士英伦男外教 (UK Male Tutor)</option>
+            <option value="en-AU-WilliamNeural">🦘 William — 阳光澳式男声 (Australian Male)</option>
+            <option value="en-US-ChristopherNeural">🎬 Christopher — 深沉低音旁白男声 (Deep Bass Narrator)</option>
+          </select>
+        </div>
+        <div class="setting-row hidden" id="row-openai-voice">
+          <label>选择 OpenAI TTS 音色</label>
+          <select id="set-openai-voice" class="select-input">
+            <option value="nova">Nova (清亮甜美)</option>
+            <option value="shimmer">Shimmer (柔和温暖)</option>
+            <option value="alloy">Alloy (中性自然)</option>
+            <option value="fable">Fable (英式叙事)</option>
+            <option value="echo">Echo (沉稳男声)</option>
+            <option value="onyx">Onyx (低沉磁性)</option>
+          </select>
+        </div>
+        <div class="setting-row hidden" id="row-webspeech-voice">
+          <label>选择系统本地语音</label>
+          <select id="set-webspeech-voice" class="select-input"></select>
+        </div>
+        <div class="form-grid-2">
+          <div class="setting-row">
+            <label>语速 (Speed): <strong id="lbl-rate">1.0x</strong></label>
+            <input id="set-rate" type="range" min="0.6" max="1.5" step="0.05" value="1.0" />
+          </div>
+          <div class="setting-row">
+            <label>音调 (Pitch): <strong id="lbl-pitch">1.0</strong></label>
+            <input id="set-pitch" type="range" min="0.8" max="1.3" step="0.05" value="1.0" />
+          </div>
+        </div>
+        <div class="setting-row">
+          <label>语音转文字方式 (Speech-to-Text)</label>
+          <select id="set-stt-provider" class="select-input">
+            <option value="auto">智能自动 (有 API Key 优先 Whisper，否则浏览器语音识别)</option>
+            <option value="whisper">强制使用 Whisper API (/audio/transcriptions)</option>
+            <option value="webspeech">浏览器内置实时语音识别 (Web Speech API)</option>
+          </select>
+        </div>
+        <div class="toolbar-row">
+          <button id="btn-preview-voice" class="secondary-btn">🔊 试听当前音色</button>
+          <span id="voice-preview-status" class="status-text"></span>
+        </div>
+      </div>
+
+      <!-- Cloud Sync Tab -->
+      <div id="set-tab-cloud" class="modal-body form-scroll hidden">
+        <div class="setting-row">
+          <label>云端同步方式 (支持配置自己的云端保存词库、学习进度与知识包)</label>
+          <select id="set-cloud-provider" class="select-input">
+            <option value="none">关闭云端同步 (仅本地保存)</option>
+            <option value="webdav">WebDAV (坚果云 / Nextcloud / Alist / 群晖)</option>
+            <option value="gist">GitHub Gist (私有 Gist 免费云同步)</option>
+            <option value="custom">自定义 REST Endpoint (GET / PUT JSON)</option>
+          </select>
+        </div>
+        <div id="cloud-fields">
+          <div class="setting-row" id="row-cloud-endpoint">
+            <label>云端地址 (WebDAV 目录 URL 或 REST URL)</label>
+            <input id="set-cloud-endpoint" class="text-input" placeholder="例如 https://dav.jianguoyun.com/dav/HaruEnglishPet/" />
+          </div>
+          <div class="setting-row" id="row-cloud-user">
+            <label>用户名 (WebDAV 账号)</label>
+            <input id="set-cloud-user" class="text-input" placeholder="your-email@example.com" />
+          </div>
+          <div class="setting-row">
+            <label id="lbl-cloud-token">应用密码 / Token</label>
+            <input id="set-cloud-token" type="password" class="text-input" placeholder="密码或 Personal Access Token" />
+          </div>
+          <div class="form-grid-2">
+            <div class="setting-row">
+              <label>远程文件名</label>
+              <input id="set-cloud-filename" class="text-input" value="haru-english-pet-sync.json" />
+            </div>
+            <div class="setting-row" id="row-cloud-gist">
+              <label>Gist ID (留空首次同步自动创建)</label>
+              <input id="set-cloud-gistid" class="text-input" placeholder="可选" />
+            </div>
+          </div>
+          <div class="setting-checks">
+            <label><input id="set-cloud-autosync" type="checkbox" /> 测验或更新单词后自动云端同步</label>
+          </div>
+          <div class="toolbar-row">
+            <button id="btn-cloud-merge" class="primary-btn">☁️ 双向合并同步</button>
+            <button id="btn-cloud-push" class="secondary-btn">⬆️ 仅上传</button>
+            <button id="btn-cloud-pull" class="secondary-btn">⬇️ 仅拉取</button>
+          </div>
+          <div id="cloud-sync-status" class="status-text"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-open-data-dir" class="secondary-btn">📂 打开本地数据目录</button>
+        <div class="footer-right">
+          <button class="secondary-btn" data-close="settings">取消</button>
+          <button id="btn-save-settings" class="primary-btn">💾 保存设置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Right-Click Context Menu on Pet -->
+    <div id="pet-context-menu" class="context-menu hidden hit-zone">
+      <button data-ctx="chat">💬 英语对话 / 翻译</button>
+      <button data-ctx="actions">🎭 英文表情动作</button>
+      <button data-ctx="quiz">📝 来一组单词测试</button>
+      <button data-ctx="words">📚 不熟练的英文</button>
+      <button data-ctx="settings">⚙️ 设置 (API / 音色 / 云端)</button>
+      <div class="ctx-sep"></div>
+      <button data-ctx="hide">👁️ 暂时隐藏桌宠</button>
+    </div>
+  </div>
+
+  <script src="js/bridge.js"></script>
+  <script src="js/voice.js"></script>
+  <script src="js/live2d-pet.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

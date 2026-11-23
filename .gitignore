@@ -1,0 +1,24 @@
+# .NET / Visual Studio build outputs
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.cache
+*.log
+
+# WebView2 / runtime user data
+*.WebView2/
+EBWebView/
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Local secrets / personal config (just in case)
+.env
+.env.*
+settings.local.json

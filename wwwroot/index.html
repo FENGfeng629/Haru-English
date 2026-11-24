@@ -11,6 +11,11 @@
   <script src="vendor/cubism4.min.js"></script>
 </head>
 <body>
+  <script>
+    if (new URLSearchParams(location.search).get("view") === "settings") {
+      document.body.dataset.view = "settings";
+    }
+  </script>
   <div id="desktop-stage">
     <!-- Pet Anchor Container (Positioned freely on desktop, draggable) -->
     <div id="pet-anchor" class="hit-zone">
@@ -24,41 +29,46 @@
         <div id="pet-sparkle-layer"></div>
       </div>
 
-      <!-- Pet-Adjacent Floating Side Dock (桌宠旁边的托盘) -->
+      <!-- Pet-Adjacent Frosted Floating Side Dock (4 枚简洁线性矢量按钮：Chat / Act / Quiz / Set) -->
       <div id="side-dock" class="side-dock hit-zone" title="Haru 快捷托盘">
-        <button class="dock-btn" data-panel="chat" title="English Chat & Translate (英语对话/翻译)">
-          <span class="dock-icon">💬</span>
+        <div id="dock-indicator" class="dock-indicator" aria-hidden="true"></div>
+        <button class="dock-btn" data-panel="chat" title="英语对话、语音与翻译">
+          <span class="dock-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+          </span>
           <span class="dock-label">Chat</span>
         </button>
-        <button class="dock-btn" data-panel="actions" title="Expressions & Motions in English (表情动作英文)">
-          <span class="dock-icon">🎭</span>
+        <button class="dock-btn" data-panel="actions" title="表情动作词汇">
+          <span class="dock-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+          </span>
           <span class="dock-label">Act</span>
         </button>
-        <button class="dock-btn" id="dock-mic-btn" title="Voice-to-Text Talk (语音对话)">
-          <span class="dock-icon">🎤</span>
-          <span class="dock-label">Talk</span>
-        </button>
-        <button class="dock-btn" id="dock-quiz-btn" title="Quick Word Quiz (单词测试)">
-          <span class="dock-icon">📝</span>
+        <button class="dock-btn" id="dock-quiz-btn" title="单词抽查测验">
+          <span class="dock-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+          </span>
           <span class="dock-label">Quiz</span>
         </button>
-        <button class="dock-btn" data-panel="words" title="Weak Words & Knowledge (不熟练词库/知识库)">
-          <span class="dock-icon">📚</span>
-          <span class="dock-label">Words</span>
-        </button>
-        <button class="dock-btn" data-panel="settings" title="Settings & Cloud Sync (API/音色/云端设置)">
-          <span class="dock-icon">⚙️</span>
+        <button class="dock-btn" data-panel="settings" title="应用设置与词库中心">
+          <span class="dock-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          </span>
           <span class="dock-label">Set</span>
         </button>
       </div>
 
-      <!-- Floating Speech Bubble (Above Haru) -->
+      <!-- Floating Speech Bubble (Unified Desktop Card Style) -->
       <div id="speech-bubble" class="speech-bubble hidden hit-zone">
         <div class="bubble-header">
           <span id="bubble-badge" class="bubble-badge">Haru</span>
           <div class="bubble-actions">
-            <button id="bubble-speak-btn" class="icon-mini-btn" title="Replay Voice">🔊</button>
-            <button id="bubble-close-btn" class="icon-mini-btn" title="Close">✕</button>
+            <button id="bubble-speak-btn" class="icon-mini-btn" title="重播语音">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            </button>
+            <button id="bubble-close-btn" class="icon-mini-btn" title="关闭并停止朗读">
+              <svg viewBox="0 0 12 12" width="10" height="10"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </button>
           </div>
         </div>
         <div id="bubble-en" class="bubble-en"></div>
@@ -66,369 +76,920 @@
         <div id="bubble-extra" class="bubble-extra hidden"></div>
       </div>
 
-      <!-- Actions & Expressions English Panel (桌宠旁边的英文表情动作托盘) -->
+      <!-- Actions & Expressions English Panel (Unified Clash Verge Style) -->
       <div id="actions-panel" class="floating-card actions-panel hidden hit-zone">
         <div class="card-header">
-          <div>
-            <div class="card-title">🎭 Expressions &amp; Actions</div>
-            <div class="card-sub">Click any English word — Haru acts &amp; speaks!</div>
+          <div class="card-head-title">
+            <span class="bento-badge sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+            </span>
+            <div>
+              <div class="card-title">表情与动作词汇</div>
+              <div class="card-sub">点击任意英文词条，Haru 即刻演绎并朗读</div>
+            </div>
           </div>
-          <button class="close-btn" data-close="actions">✕</button>
+          <button class="close-btn" data-close="actions" title="关闭">
+            <svg viewBox="0 0 12 12" width="10" height="10"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
         </div>
         <div class="actions-tabs">
-          <button class="pill-tab active" data-act-tab="all">All (16)</button>
-          <button class="pill-tab" data-act-tab="expression">Expressions</button>
-          <button class="pill-tab" data-act-tab="motion">Motions</button>
+          <div class="seg-pills seg-3 compact-pills">
+            <button class="seg-pill active" data-act-tab="all">全部 (16)</button>
+            <button class="seg-pill" data-act-tab="expression">表情</button>
+            <button class="seg-pill" data-act-tab="motion">动作</button>
+          </div>
         </div>
         <div id="actions-grid" class="actions-grid"></div>
         <div id="action-preview-bar" class="action-preview-bar hidden">
           <div class="ap-word-row">
             <strong id="ap-word"></strong>
             <span id="ap-phonetic" class="phonetic"></span>
-            <button id="ap-save-weak" class="mini-tag-btn">+ Weak Words</button>
+            <button id="ap-save-weak" class="mini-tag-btn">+ 收入生词</button>
           </div>
           <div id="ap-meaning" class="ap-meaning"></div>
           <div id="ap-example" class="ap-example"></div>
         </div>
       </div>
 
-      <!-- Floating English Chat & Translator Panel (英语对话与翻译框) -->
+      <!-- Floating English Chat, Talk & Translate Panel (Unified Clash Verge Style) -->
       <div id="chat-panel" class="floating-card chat-panel hidden hit-zone">
         <div class="card-header">
           <div class="chat-mode-switch">
-            <button class="mode-btn active" data-chat-mode="chat">💬 Chat</button>
-            <button class="mode-btn" data-chat-mode="translate">🌐 Translate</button>
+            <button class="mode-btn active" data-chat-mode="chat">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+              <span>Chat</span>
+            </button>
+            <button class="mode-btn" data-chat-mode="talk">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+              <span>Talk</span>
+            </button>
+            <button class="mode-btn" data-chat-mode="translate">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+              <span>Translate</span>
+            </button>
           </div>
           <div class="header-right-tools">
-            <span id="chat-level-pill" class="level-pill" title="Current English Level">B1</span>
-            <span id="study-time-pill" class="time-pill" title="Today / Total Study Time">0m</span>
-            <button id="chat-clear-btn" class="icon-mini-btn" title="Clear Chat">🗑️</button>
-            <button class="close-btn" data-close="chat">✕</button>
+            <span id="chat-level-pill" class="level-pill" title="当前英语水平">B1</span>
+            <span id="study-time-pill" class="time-pill" title="今日专注时长">0m</span>
+            <button id="chat-clear-btn" class="icon-mini-btn" title="清空对话">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            </button>
+            <button class="close-btn" data-close="chat" title="关闭">
+              <svg viewBox="0 0 12 12" width="10" height="10"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </button>
           </div>
         </div>
 
         <div id="chat-messages" class="chat-messages"></div>
 
+        <div id="talk-stage" class="talk-stage hidden">
+          <button id="talk-big-mic-btn" class="talk-big-mic-btn" title="点击开始 / 停止语音对话">
+            <span id="talk-mic-icon" class="talk-mic-svg">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+            </span>
+            <span id="talk-mic-label">点击开始语音对话</span>
+          </button>
+          <div id="talk-hint" class="talk-hint">直接说英语，识别完成后将自动发送给 Haru 回复</div>
+        </div>
+
         <div id="stt-status-bar" class="stt-status-bar hidden">
           <span class="rec-dot"></span>
           <span id="stt-status-text">Listening... Speak English now</span>
-          <button id="stt-stop-btn" class="mini-tag-btn danger">Stop</button>
+          <button id="stt-stop-btn" class="mini-tag-btn danger">停止</button>
         </div>
 
         <div class="chat-input-bar">
-          <button id="chat-mic-btn" class="mic-btn" title="Speech to Text (语音转文字)">🎤</button>
-          <textarea id="chat-input" rows="1" placeholder="Say something in English... (Enter to send)"></textarea>
-          <button id="chat-send-btn" class="send-btn" title="Send">➤</button>
+          <button id="chat-mic-btn" class="mic-btn" title="语音输入 (Talk)">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+          </button>
+          <textarea id="chat-input" rows="1" placeholder="用英语和 Haru 聊天... (Enter 发送)"></textarea>
+          <button id="chat-send-btn" class="send-btn" title="发送">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+          </button>
         </div>
       </div>
 
-      <!-- Proactive Idle / Manual Word Quiz Card -->
+      <!-- Proactive Idle / Manual Word Quiz Card (Unified Clash Verge Style) -->
       <div id="quiz-panel" class="floating-card quiz-panel hidden hit-zone">
         <div class="card-header">
-          <div>
-            <div class="card-title">📝 English Word Quiz</div>
-            <div id="quiz-progress-text" class="card-sub">Question 1 / 4 · Level B1</div>
+          <div class="card-head-title">
+            <span class="bento-badge sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+            </span>
+            <div>
+              <div class="card-title">单词抽查测验</div>
+              <div id="quiz-progress-text" class="card-sub">Question 1 / 4 · 混合抽查</div>
+            </div>
           </div>
-          <button class="close-btn" data-close="quiz">✕</button>
+          <button class="close-btn" data-close="quiz" title="关闭">
+            <svg viewBox="0 0 12 12" width="10" height="10"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="quiz-book-bar">
+          <div class="seg-pills seg-4 quiz-book-pills" role="group" aria-label="抽查词库切换">
+            <button type="button" class="seg-pill active" data-quiz-book="all">混合</button>
+            <button type="button" class="seg-pill" data-quiz-book="toefl_core">托福</button>
+            <button type="button" class="seg-pill" data-quiz-book="blender_3d">Blender</button>
+            <button type="button" class="seg-pill" data-quiz-book="weak">生词</button>
+          </div>
         </div>
         <div id="quiz-body" class="quiz-body"></div>
       </div>
     </div>
 
-    <!-- Center Modal: Weak Words & Knowledge Base (不熟练英文 & 英文知识库) -->
-    <div id="words-modal" class="center-modal hidden hit-zone">
-      <div class="modal-header">
-        <div class="modal-tabs">
-          <button class="modal-tab active" data-words-tab="weak">📚 不熟练的英文 (Weak Words)</button>
-          <button class="modal-tab" data-words-tab="knowledge">📖 英文知识库 (Knowledge Base)</button>
-          <button class="modal-tab" data-words-tab="stats">🏆 学习统计 (Stats)</button>
-        </div>
-        <button class="close-btn" data-close="words">✕</button>
-      </div>
-
-      <!-- Tab 1: Weak Words -->
-      <div id="tab-weak" class="modal-body">
-        <div class="toolbar-row">
-          <input id="weak-search" type="text" class="text-input" placeholder="搜索单词或释义..." />
-          <select id="weak-filter" class="select-input">
-            <option value="unmastered">待巩固</option>
-            <option value="all">全部</option>
-            <option value="mastered">已掌握</option>
-          </select>
-          <button id="btn-quiz-weak" class="primary-btn">🎯 专攻测验</button>
-          <button id="btn-toggle-add-weak" class="secondary-btn">+ 手动添加</button>
-        </div>
-
-        <div id="add-weak-form" class="inline-form hidden">
-          <input id="new-weak-word" class="text-input" placeholder="English word / phrase" />
-          <input id="new-weak-phonetic" class="text-input" placeholder="音标 (可选) e.g. /həˈloʊ/" />
-          <input id="new-weak-meaning" class="text-input" placeholder="中文释义" />
-          <input id="new-weak-example" class="text-input" placeholder="例句 (可选)" />
-          <button id="btn-save-weak" class="primary-btn">保存</button>
-        </div>
-
-        <div id="weak-words-list" class="list-scroll"></div>
-      </div>
-
-      <!-- Tab 2: Extensible Knowledge Base -->
-      <div id="tab-knowledge" class="modal-body hidden">
-        <div class="toolbar-row">
-          <button id="btn-toggle-import-pack" class="primary-btn">+ 导入 / 新建英文知识包</button>
-          <button id="btn-open-knowledge-dir" class="secondary-btn">📂 打开知识库目录</button>
-        </div>
-
-        <div id="import-pack-form" class="import-box hidden">
-          <div class="form-grid-2">
-            <input id="pack-name" class="text-input" placeholder="知识包名称 (如: 雅思高频词 / 日常口语)" />
-            <select id="pack-level" class="select-input">
-              <option value="A1">A1 入门</option>
-              <option value="A2">A2 基础</option>
-              <option value="B1" selected>B1 中级</option>
-              <option value="B2">B2 中高级</option>
-              <option value="C1">C1 高级</option>
-              <option value="C2">C2 精通</option>
-            </select>
+    <!-- Integrated Clash-Verge-Style Settings Window (Sidebar + 2-Col Bento Grid + Vocabulary Hub + Auto-Save) -->
+    <div id="settings-modal" class="center-modal cv-settings hidden hit-zone">
+      <!-- Left Fixed Sidebar -->
+      <aside class="cv-sidebar">
+        <div class="cv-brand" id="cv-drag-brand">
+          <div class="cv-brand-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L14.8 8.6L22 9.3L16.5 14L18.2 21L12 17.3L5.8 21L7.5 14L2 9.3L9.2 8.6L12 2Z"/></svg>
           </div>
-          <input id="pack-desc" class="text-input" placeholder="简介 (可选)" />
-          <textarea id="pack-bulk-text" rows="5" class="textarea-input" placeholder="每行一条，支持格式：
-word | 中文释义 | 音标(可选) | 例句(可选)
-或直接粘贴 JSON 数组 [{&quot;word&quot;:&quot;...&quot;,&quot;meaning&quot;:&quot;...&quot;,&quot;example&quot;:&quot;...&quot;}]"></textarea>
-          <div class="toolbar-row">
-            <label class="secondary-btn file-label">
-              📄 从本地文件读取 (.json/.txt/.csv)
-              <input id="pack-file-input" type="file" accept=".json,.txt,.csv" hidden />
-            </label>
-            <button id="btn-save-pack" class="primary-btn">保存知识包</button>
-            <button id="btn-cancel-pack" class="secondary-btn">取消</button>
+          <div class="cv-brand-text">
+            <span class="cv-brand-name">Haru Pet</span>
+            <span class="cv-brand-sub">English Companion</span>
           </div>
         </div>
 
-        <div id="knowledge-packs-list" class="list-scroll"></div>
+        <nav class="cv-nav" role="tablist" aria-label="设置导航">
+          <button type="button" class="cv-nav-item active" data-set-tab="overview" data-page-title="总览与外观" role="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></svg>
+            <span>总览与外观</span>
+          </button>
+          <button type="button" class="cv-nav-item" data-set-tab="learning" data-page-title="英语学习" role="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
+            <span>英语学习</span>
+          </button>
+          <button type="button" class="cv-nav-item" data-set-tab="words" data-page-title="词库中心" role="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            <span>词库中心</span>
+          </button>
+          <button type="button" class="cv-nav-item" data-set-tab="api" data-page-title="AI 模型接口" role="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+            <span>AI 模型接口</span>
+          </button>
+          <button type="button" class="cv-nav-item" data-set-tab="voice" data-page-title="语音与听力" role="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>
+            <span>语音与听力</span>
+          </button>
+          <button type="button" class="cv-nav-item" data-set-tab="data" data-page-title="数据与设置" role="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+            <span>数据与设置</span>
+          </button>
+        </nav>
+
+        <!-- Permanent Bottom-Left Status Micro-Card -->
+        <div class="cv-status-card">
+          <div class="cv-status-metrics">
+            <div class="cv-metric">
+              <span class="cv-metric-label">生词本</span>
+              <strong id="sb-today-words" class="cv-metric-val">0 词</strong>
+            </div>
+            <div class="cv-metric-sep"></div>
+            <div class="cv-metric">
+              <span class="cv-metric-label">今日专注</span>
+              <strong id="sb-today-time" class="cv-metric-val">0m</strong>
+            </div>
+          </div>
+          <div class="cv-status-api">
+            <span id="sb-api-dot" class="cv-dot dot-idle"></span>
+            <span id="sb-api-status" class="cv-api-text">离线词库模式</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right Main Workspace -->
+      <div class="cv-main">
+        <!-- Integrated Topbar (Draggable Header + Page Title + Quick Actions + Window Controls) -->
+        <header class="cv-topbar" id="cv-drag-topbar">
+          <div class="cv-topbar-left">
+            <h2 id="cv-page-title" class="cv-page-title">总览与外观</h2>
+            <span id="cv-autosave-badge" class="cv-autosave-badge">已自动保存</span>
+          </div>
+          <div class="cv-topbar-right">
+            <div class="cv-quick-actions">
+              <button type="button" id="btn-quick-theme" class="cv-icon-btn" title="快速切换浅色 / 深色模式">
+                <svg id="icon-quick-sun" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg id="icon-quick-moon" class="hidden" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+              </button>
+              <button type="button" id="btn-quick-topmost" class="cv-icon-btn active" title="切换窗口置顶">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+              </button>
+            </div>
+            <div class="cv-top-sep"></div>
+            <div class="win-caption-btns">
+              <button type="button" id="btn-settings-maximize" class="win-cap-btn" title="放大 / 还原设置窗口">
+                <svg id="icon-settings-max" viewBox="0 0 12 12" width="11" height="11"><rect x="1.8" y="1.8" width="8.4" height="8.4" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+                <svg id="icon-settings-restore" class="hidden" viewBox="0 0 12 12" width="11" height="11">
+                  <path d="M3.5 3.5V2.2C3.5 1.8 3.8 1.5 4.2 1.5H9.8C10.2 1.5 10.5 1.8 10.5 2.2V7.8C10.5 8.2 10.2 8.5 9.8 8.5H8.5" fill="none" stroke="currentColor" stroke-width="1.15"/>
+                  <rect x="1.5" y="3.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.15"/>
+                </svg>
+              </button>
+              <button type="button" class="win-cap-btn win-cap-close" data-close="settings" title="关闭设置">
+                <svg viewBox="0 0 12 12" width="11" height="11"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <!-- Scrollable Bento Content Viewport -->
+        <div class="cv-content">
+          <!-- ==================== PAGE 1: 总览与外观 ==================== -->
+          <div id="set-tab-overview" class="bento-grid">
+            <!-- Card 1: 外观与主题 -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+                  </span>
+                  <h3 class="bento-title">外观与主题</h3>
+                </div>
+              </div>
+              <div class="bento-body">
+                <div class="seg-cards seg-3" role="group" aria-label="色彩模式">
+                  <button type="button" class="seg-card theme-seg-btn active" data-ui-theme="light">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                    <span>浅色</span>
+                  </button>
+                  <button type="button" class="seg-card theme-seg-btn" data-ui-theme="dark">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                    <span>深色</span>
+                  </button>
+                  <button type="button" class="seg-card theme-seg-btn" data-ui-theme="system">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+                    <span>跟随系统</span>
+                  </button>
+                </div>
+
+                <div class="bento-inline-row">
+                  <span class="bento-label">强调色</span>
+                  <div class="border-swatches" role="group" aria-label="精选强调色">
+                    <button type="button" class="border-swatch active" data-ui-border="blue" style="--sw:#2563EB" title="晴空蓝"></button>
+                    <button type="button" class="border-swatch" data-ui-border="pink" style="--sw:#E11D74" title="樱花粉"></button>
+                    <button type="button" class="border-swatch" data-ui-border="purple" style="--sw:#7C3AED" title="紫罗兰"></button>
+                    <button type="button" class="border-swatch" data-ui-border="green" style="--sw:#059669" title="翡翠绿"></button>
+                  </div>
+                </div>
+
+                <div class="bento-slider-block">
+                  <div class="bento-slider-head">
+                    <span class="bento-label">桌宠缩放比例</span>
+                    <span id="lbl-scale" class="s-value-badge">100%</span>
+                  </div>
+                  <input id="set-scale" type="range" min="0.45" max="1.6" step="0.05" value="1.0" />
+                </div>
+              </div>
+            </section>
+
+            <!-- Card 2: 窗口与防打扰 -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+                  </span>
+                  <h3 class="bento-title">窗口与防打扰</h3>
+                </div>
+              </div>
+              <div class="bento-body bento-list">
+                <label class="bento-switch-row" for="set-topmost">
+                  <div>
+                    <div class="bento-row-title">置顶显示</div>
+                    <div class="bento-row-desc">让桌宠保持在桌面其他窗口之上</div>
+                  </div>
+                  <span class="s-switch"><input id="set-topmost" type="checkbox" /><span class="s-switch-track"></span></span>
+                </label>
+                <label class="bento-switch-row" for="set-lock">
+                  <div>
+                    <div class="bento-row-title">锁定桌宠位置</div>
+                    <div class="bento-row-desc">防止操作桌面时误拖拽移动角色</div>
+                  </div>
+                  <span class="s-switch"><input id="set-lock" type="checkbox" /><span class="s-switch-track"></span></span>
+                </label>
+                <label class="bento-switch-row" for="set-fullscreen-dnd">
+                  <div>
+                    <div class="bento-row-title">全屏自动隐身 / 勿扰</div>
+                    <div class="bento-row-desc">视频、游戏或演示全屏时自动隐藏并暂停抽查</div>
+                  </div>
+                  <span class="s-switch"><input id="set-fullscreen-dnd" type="checkbox" /><span class="s-switch-track"></span></span>
+                </label>
+              </div>
+            </section>
+
+            <!-- Card 3: 桌宠形象 -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  </span>
+                  <h3 class="bento-title">桌宠形象</h3>
+                </div>
+                <button type="button" id="btn-open-model-dialog" class="bento-head-btn">导入自定义模型</button>
+              </div>
+              <div class="bento-body">
+                <div class="model-preset-grid">
+                  <button type="button" class="model-preset-card active" data-model-preset="models/haru/haru_greeter_t03.model3.json">
+                    <span class="model-avatar">H</span>
+                    <div class="model-meta">
+                      <strong>Haru · 本地内置</strong>
+                      <span>秒开离线 · Cubism 4</span>
+                    </div>
+                  </button>
+                  <button type="button" class="model-preset-card" data-model-preset="https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display/test/assets/haru/haru_greeter_t03.model3.json">
+                    <span class="model-avatar alt">C</span>
+                    <div class="model-meta">
+                      <strong>Haru · 云端镜像</strong>
+                      <span>jsDelivr 在线资源</span>
+                    </div>
+                  </button>
+                </div>
+                <div id="lbl-current-model" class="bento-hint-strip">当前模型：本地内置 Haru（无需联网）</div>
+              </div>
+            </section>
+
+            <!-- Card 4: 全局快捷键 -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.001M10 8h.001M14 8h.001M18 8h.001M8 12h.001M12 12h.001M16 12h.001M7 16h10"/></svg>
+                  </span>
+                  <h3 class="bento-title">全局快捷键</h3>
+                </div>
+                <button type="button" id="btn-reset-hotkeys" class="bento-head-btn">恢复默认</button>
+              </div>
+              <div class="bento-body bento-list">
+                <div class="bento-hotkey-row">
+                  <span class="bento-row-title">快速语音对话（Talk）</span>
+                  <button type="button" id="hk-talk" class="hotkey-cap" data-hotkey-key="talk" title="点击后按下组合键修改">Alt + T</button>
+                </div>
+                <div class="bento-hotkey-row">
+                  <span class="bento-row-title">立即抽查单词（Quiz）</span>
+                  <button type="button" id="hk-quiz" class="hotkey-cap" data-hotkey-key="quiz" title="点击后按下组合键修改">Alt + Q</button>
+                </div>
+                <div class="bento-hotkey-row">
+                  <span class="bento-row-title">显示 / 隐藏桌宠</span>
+                  <button type="button" id="hk-toggle" class="hotkey-cap" data-hotkey-key="togglePet" title="点击后按下组合键修改">Alt + H</button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ==================== PAGE 2: 英语学习 ==================== -->
+          <div id="set-tab-learning" class="bento-grid hidden">
+            <!-- Card 1: 水平与对话风格 -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  </span>
+                  <h3 class="bento-title">水平与对话风格</h3>
+                </div>
+              </div>
+              <div class="bento-body">
+                <div class="bento-sub-label">英语水平（CEFR）</div>
+                <div class="seg-pills seg-5" role="group" aria-label="英语水平">
+                  <button type="button" class="seg-pill" data-level="A1">A1</button>
+                  <button type="button" class="seg-pill" data-level="A2">A2</button>
+                  <button type="button" class="seg-pill active" data-level="B1">B1</button>
+                  <button type="button" class="seg-pill" data-level="B2">B2</button>
+                  <button type="button" class="seg-pill" data-level="C1">C1</button>
+                </div>
+
+                <div class="bento-sub-label">AI 纠错风格</div>
+                <div class="seg-cards seg-2" role="group" aria-label="AI 纠错风格">
+                  <button type="button" class="seg-card active" data-correction-style="gentle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                    <span>温柔聊天</span>
+                  </button>
+                  <button type="button" class="seg-card" data-correction-style="strict">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+                    <span>严格纠错</span>
+                  </button>
+                </div>
+                <div id="hint-correction-style" class="bento-hint-strip">自然对话不打断，仅在出现明显错误时温和提示。</div>
+              </div>
+            </section>
+
+            <!-- Card 2: 待机抽查规则 -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  </span>
+                  <h3 class="bento-title">待机抽查规则</h3>
+                </div>
+              </div>
+              <div class="bento-body">
+                <div class="bento-sub-label">待机抽查频率</div>
+                <div class="seg-pills seg-4" role="group" aria-label="待机抽查频率">
+                  <button type="button" class="seg-pill" data-activity="off">关闭</button>
+                  <button type="button" class="seg-pill" data-activity="quiet">30分</button>
+                  <button type="button" class="seg-pill active" data-activity="normal">12分</button>
+                  <button type="button" class="seg-pill" data-activity="lively">5分</button>
+                </div>
+                <div id="hint-activity-level" class="bento-hint-strip">待机满 12 分钟自动发起一组 4 题单词复习测验。</div>
+
+                <div class="bento-sub-label">当前抽查词库</div>
+                <select id="set-quiz-pack" class="s-select">
+                  <option value="all">全部已启用词库</option>
+                  <option value="weak">仅不熟练生词</option>
+                </select>
+              </div>
+            </section>
+
+            <!-- Card 3: 气泡与辅助 -->
+            <section class="bento-card bento-span-2">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+                  </span>
+                  <h3 class="bento-title">气泡与辅助</h3>
+                </div>
+              </div>
+              <div class="bento-body bento-two-col-inner">
+                <div>
+                  <div class="bento-sub-label">中文释义显示策略</div>
+                  <div class="seg-cards seg-3" role="group" aria-label="中文释义策略">
+                    <button type="button" class="seg-card active" data-zh-mode="always">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                      <span>始终显示</span>
+                    </button>
+                    <button type="button" class="seg-card" data-zh-mode="hover">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>
+                      <span>悬停/点击</span>
+                    </button>
+                    <button type="button" class="seg-card" data-zh-mode="hide">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                      <span>隐藏</span>
+                    </button>
+                  </div>
+                  <div id="hint-zh-mode" class="bento-hint-strip">在桌宠气泡与对话回复下方始终展示中文辅助翻译。</div>
+                </div>
+
+                <div class="bento-side-box">
+                  <label class="bento-switch-row" for="set-auto-speak">
+                    <div>
+                      <div class="bento-row-title">自动朗读英文回复</div>
+                      <div class="bento-row-desc">收到对话回复或点击互动时自动朗读英语</div>
+                    </div>
+                    <span class="s-switch"><input id="set-auto-speak" type="checkbox" /><span class="s-switch-track"></span></span>
+                  </label>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ==================== PAGE 2.5: 词库中心（托福 TOEFL + Blender 3D + 个人生词本 + 统计） ==================== -->
+          <div id="set-tab-words" class="words-hub-page hidden">
+            <!-- Top Row: 4-Way Vocab Book Switcher Capsules + View Mode Switch -->
+            <div class="words-subnav-bar">
+              <div class="seg-pills seg-4 vocab-book-tabs" role="tablist" aria-label="词库切换">
+                <button type="button" class="seg-pill active" data-vocab-book="all" role="tab">全部</button>
+                <button type="button" class="seg-pill" data-vocab-book="weak" role="tab">个人生词本</button>
+                <button type="button" class="seg-pill" data-vocab-book="toefl_core" role="tab">托福 TOEFL</button>
+                <button type="button" class="seg-pill" data-vocab-book="blender_3d" role="tab">Blender 3D</button>
+              </div>
+              <div class="seg-pills seg-3 words-view-switch" role="tablist" aria-label="视图切换">
+                <button type="button" class="seg-pill active" data-words-tab="weak" role="tab">词表</button>
+                <button type="button" class="seg-pill" data-words-tab="knowledge" role="tab">词库包</button>
+                <button type="button" class="seg-pill" data-words-tab="stats" role="tab">统计</button>
+              </div>
+            </div>
+
+            <div class="words-hub-meta">
+              <span class="words-meta-pill">待巩固 <strong id="words-sb-weak">0</strong></span>
+              <span class="words-meta-pill">正确率 <strong id="words-sb-acc">—</strong></span>
+              <span id="words-sb-packs" class="words-meta-pill">词库已就绪</span>
+            </div>
+
+            <!-- View 1: Unified Paginated Vocabulary Browser (All / Weak Words / TOEFL / Blender 3D) -->
+            <div id="tab-weak" class="words-pane">
+              <div class="bento-card words-toolbar-card">
+                <div class="toolbar-row compact-toolbar">
+                  <input id="weak-search" type="text" class="s-input words-search-input" placeholder="搜索单词、中文释义、分类或快捷键（如 Ctrl + B）..." />
+                  <select id="weak-filter" class="s-select words-filter-select hidden">
+                    <option value="unmastered">待巩固</option>
+                    <option value="all">全部</option>
+                    <option value="mastered">已掌握</option>
+                  </select>
+                  <button type="button" id="btn-quiz-weak" class="s-btn-primary">抽查当前词库</button>
+                  <button type="button" id="btn-open-json-import" class="s-btn-secondary">导入 JSON 词库</button>
+                  <button type="button" id="btn-toggle-add-weak" class="s-btn-secondary hidden">手动添加</button>
+                </div>
+              </div>
+
+              <!-- Inline Quick Add Weak Word Form -->
+              <div id="add-weak-form" class="bento-card inline-form hidden">
+                <div class="bento-inline-grid-2">
+                  <input id="new-weak-word" class="s-input" placeholder="English word / Blender term" />
+                  <input id="new-weak-phonetic" class="s-input" placeholder="音标（可选）如 /ˈbevl/" />
+                </div>
+                <div class="bento-inline-grid-2">
+                  <input id="new-weak-category" class="s-input" placeholder="分类（可选）如 高频 · 学术 / 建模 · Mesh" />
+                  <input id="new-weak-shortcut" class="s-input" placeholder="快捷键（可选）如 Ctrl + B" />
+                </div>
+                <input id="new-weak-meaning" class="s-input" placeholder="中文释义" />
+                <input id="new-weak-example" class="s-input" placeholder="英文例句（可选）" />
+                <div class="bento-btn-row">
+                  <button type="button" id="btn-save-weak" class="s-btn-primary">保存到个人生词本</button>
+                </div>
+              </div>
+
+              <!-- Inline One-Click JSON Vocab Importer (Append to TOEFL / Blender or Create Custom Pack) -->
+              <div id="quick-import-form" class="bento-card import-box hidden">
+                <div class="bento-inline-grid-2">
+                  <select id="quick-import-target" class="s-select">
+                    <option value="toefl_core">追加合并到「托福 TOEFL」</option>
+                    <option value="blender_3d">追加合并到「Blender 3D」</option>
+                    <option value="new">新建独立自定义词库</option>
+                  </select>
+                  <input id="quick-import-name" class="s-input hidden" placeholder="新词库名称（如：托福核心 3000 词）" />
+                </div>
+                <textarea id="quick-import-text" rows="5" class="textarea-input" placeholder="直接粘贴 JSON 数组或选本地 .json 文件（自动去重，支持数千词）：
+[{&quot;word&quot;:&quot;ubiquitous&quot;,&quot;phonetic&quot;:&quot;/juːˈbɪkwɪtəs/&quot;,&quot;pos&quot;:&quot;adj.&quot;,&quot;meaning&quot;:&quot;无处不在的&quot;,&quot;category&quot;:&quot;高频 · 学术&quot;,&quot;shortcut&quot;:&quot;&quot;,&quot;example&quot;:&quot;...&quot;,&quot;exampleZh&quot;:&quot;...&quot;}]"></textarea>
+                <div class="bento-btn-row">
+                  <label class="s-btn-secondary file-label">
+                    选择本地文件 (.json / .txt / .csv)
+                    <input id="quick-import-file" type="file" accept=".json,.txt,.csv" hidden />
+                  </label>
+                  <button type="button" id="btn-confirm-quick-import" class="s-btn-primary">确认导入</button>
+                  <button type="button" id="btn-cancel-quick-import" class="s-btn-ghost">取消</button>
+                </div>
+                <div id="quick-import-status" class="bento-hint-strip">支持完整托福 / Blender JSON 词表批量导入，重复词条会自动跳过。</div>
+              </div>
+
+              <div id="weak-words-list" class="list-scroll words-list-flex"></div>
+
+              <div id="vocab-more-bar" class="vocab-more-bar hidden">
+                <span id="vocab-count-info" class="vocab-count-info">已显示 0 / 共 0 词</span>
+                <button type="button" id="btn-vocab-load-more" class="s-btn-secondary">加载更多 (+30)</button>
+              </div>
+            </div>
+
+            <!-- View 2: Knowledge Packs Manager -->
+            <div id="tab-knowledge" class="words-pane hidden">
+              <div class="bento-card words-toolbar-card">
+                <div class="toolbar-row compact-toolbar">
+                  <button type="button" id="btn-toggle-import-pack" class="s-btn-primary">导入 / 新建词库包</button>
+                  <button type="button" id="btn-open-knowledge-dir" class="s-btn-secondary">打开词库目录</button>
+                </div>
+              </div>
+
+              <div id="import-pack-form" class="bento-card import-box hidden">
+                <div class="bento-inline-grid-2">
+                  <input id="pack-name" class="s-input" placeholder="词库包名称（如：托福阅读高频词）" />
+                  <select id="pack-level" class="s-select">
+                    <option value="TOEFL" selected>TOEFL 托福</option>
+                    <option value="3D">Blender 3D</option>
+                    <option value="Custom">自定义词库</option>
+                  </select>
+                </div>
+                <input id="pack-desc" class="s-input" placeholder="简介（可选）" />
+                <textarea id="pack-bulk-text" rows="5" class="textarea-input" placeholder="每行一条（单词 | 中文释义 | 音标 | 例句 | 分类 | 快捷键）
+或直接粘贴 JSON 数组 [{&quot;word&quot;:&quot;...&quot;,&quot;meaning&quot;:&quot;...&quot;,&quot;category&quot;:&quot;...&quot;,&quot;shortcut&quot;:&quot;...&quot;,&quot;example&quot;:&quot;...&quot;}]"></textarea>
+                <div class="bento-btn-row">
+                  <label class="s-btn-secondary file-label">
+                    从本地文件读取 (.json/.txt/.csv)
+                    <input id="pack-file-input" type="file" accept=".json,.txt,.csv" hidden />
+                  </label>
+                  <button type="button" id="btn-save-pack" class="s-btn-primary">保存词库包</button>
+                  <button type="button" id="btn-cancel-pack" class="s-btn-ghost">取消</button>
+                </div>
+              </div>
+
+              <div id="knowledge-packs-list" class="list-scroll words-list-flex"></div>
+            </div>
+
+            <!-- View 3: Study Stats -->
+            <div id="tab-stats" class="words-pane hidden">
+              <div id="stats-dashboard" class="stats-grid"></div>
+            </div>
+          </div>
+
+          <!-- ==================== PAGE 3: AI 模型接口 ==================== -->
+          <div id="set-tab-api" class="bento-grid hidden">
+            <!-- Card 1: 服务商与鉴权 -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                  </span>
+                  <h3 class="bento-title">服务商与鉴权</h3>
+                </div>
+              </div>
+              <div class="bento-body">
+                <div class="bento-sub-label">接口预设（OpenAI 兼容协议）</div>
+                <div class="seg-pills seg-3" role="group" aria-label="API 预设">
+                  <button type="button" class="seg-pill active" data-api-preset="openai">OpenAI</button>
+                  <button type="button" class="seg-pill" data-api-preset="deepseek">DeepSeek</button>
+                  <button type="button" class="seg-pill" data-api-preset="siliconflow">硅基流动</button>
+                  <button type="button" class="seg-pill" data-api-preset="gemini">Gemini</button>
+                  <button type="button" class="seg-pill" data-api-preset="ollama">Ollama</button>
+                  <button type="button" class="seg-pill" data-api-preset="custom">自定义</button>
+                </div>
+
+                <div class="bento-field">
+                  <div class="bento-field-head">
+                    <span class="bento-sub-label">接口地址 Base URL</span>
+                    <button type="button" id="btn-unlock-baseurl" class="bento-mini-link hidden">自定义地址</button>
+                  </div>
+                  <input id="set-api-url" class="s-input" placeholder="https://api.openai.com/v1" />
+                </div>
+
+                <div class="bento-field">
+                  <span class="bento-sub-label">API 密钥（失焦自动保存）</span>
+                  <div class="s-input-wrap">
+                    <input id="set-api-key" type="password" class="s-input" placeholder="sk-..." />
+                    <button type="button" id="btn-toggle-apikey" class="s-input-eye" title="显示 / 隐藏密钥">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Card 2: 模型与连通性 -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  </span>
+                  <h3 class="bento-title">模型与连通性</h3>
+                </div>
+              </div>
+              <div class="bento-body">
+                <div class="bento-field">
+                  <span class="bento-sub-label">对话与翻译模型</span>
+                  <input id="set-api-model" class="s-input" placeholder="gpt-4o-mini / deepseek-chat" />
+                </div>
+
+                <div class="api-test-bar">
+                  <button type="button" id="btn-test-api" class="s-btn-primary">测试并应用</button>
+                  <div id="api-test-pill" class="api-status-pill idle">
+                    <span class="cv-dot dot-idle"></span>
+                    <span id="api-test-status">尚未测试</span>
+                  </div>
+                </div>
+
+                <div class="bento-hint-strip">配置完成后即可解锁完整英语口语陪练、语法纠错与长句智能翻译；留空仍可使用离线词库与免费 Edge 语音。</div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ==================== PAGE 4: 语音与听力 ==================== -->
+          <div id="set-tab-voice" class="bento-grid hidden">
+            <!-- Card 1: 朗读音色 TTS -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                  </span>
+                  <h3 class="bento-title">朗读音色 TTS</h3>
+                </div>
+                <button type="button" id="btn-preview-voice" class="bento-head-btn accent-btn">试听</button>
+              </div>
+              <div class="bento-body">
+                <div class="bento-sub-label">语音合成引擎</div>
+                <div class="seg-cards seg-3" role="group" aria-label="语音合成引擎">
+                  <button type="button" class="seg-card active" data-tts-provider="edge">
+                    <span>Edge 神经</span>
+                  </button>
+                  <button type="button" class="seg-card" data-tts-provider="openai">
+                    <span>OpenAI</span>
+                  </button>
+                  <button type="button" class="seg-card" data-tts-provider="webspeech">
+                    <span>系统本地</span>
+                  </button>
+                </div>
+
+                <div class="bento-field" id="row-edge-voice">
+                  <div class="bento-field-head">
+                    <span class="bento-sub-label">音色选择</span>
+                    <span id="edge-accent-tag" class="accent-micro-tag">美音</span>
+                  </div>
+                  <select id="set-edge-voice" class="s-select">
+                    <option value="en-US-AnaNeural" data-accent="美音">[美音] Ana · 甜美少女</option>
+                    <option value="en-US-AvaMultilingualNeural" data-accent="美音">[美音] Ava · 自然知性女声</option>
+                    <option value="en-GB-SoniaNeural" data-accent="英音">[英音] Sonia · 伦敦 BBC 女声</option>
+                    <option value="en-IE-EmilyNeural" data-accent="爱尔兰">[爱尔兰] Emily · 轻灵女声</option>
+                    <option value="en-IN-NeerjaNeural" data-accent="印音">[印音] Neerja · 清晰印度女声</option>
+                    <option value="en-US-BrianMultilingualNeural" data-accent="美音">[美音] Brian · 温暖播客男声</option>
+                    <option value="en-GB-RyanNeural" data-accent="英音">[英音] Ryan · 绅士英伦男外教</option>
+                    <option value="en-AU-WilliamNeural" data-accent="澳音">[澳音] William · 阳光澳式男声</option>
+                    <option value="en-US-ChristopherNeural" data-accent="美音">[美音] Christopher · 低音旁白</option>
+                  </select>
+                </div>
+
+                <div class="bento-field hidden" id="row-openai-voice">
+                  <span class="bento-sub-label">OpenAI TTS 音色</span>
+                  <select id="set-openai-voice" class="s-select">
+                    <option value="nova">[美音] Nova · 清亮甜美</option>
+                    <option value="shimmer">[美音] Shimmer · 柔和温暖</option>
+                    <option value="alloy">[美音] Alloy · 中性自然</option>
+                    <option value="fable">[英音] Fable · 英式叙事</option>
+                    <option value="echo">[美音] Echo · 沉稳男声</option>
+                    <option value="onyx">[美音] Onyx · 低沉磁性</option>
+                  </select>
+                </div>
+
+                <div class="bento-field hidden" id="row-webspeech-voice">
+                  <span class="bento-sub-label">系统本地语音包</span>
+                  <select id="set-webspeech-voice" class="s-select"></select>
+                </div>
+
+                <div class="bento-slider-block">
+                  <div class="bento-slider-head">
+                    <span class="bento-label">朗读语速</span>
+                    <span id="lbl-rate" class="s-value-badge">1.00x</span>
+                  </div>
+                  <input id="set-rate" type="range" min="0.6" max="1.5" step="0.05" value="1.0" />
+                </div>
+
+                <div id="voice-preview-status" class="bento-hint-strip">点击右上角「试听」立即体验当前音色与语速。</div>
+              </div>
+            </section>
+
+            <!-- Card 2: 语音识别 STT -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                  </span>
+                  <h3 class="bento-title">语音识别 STT</h3>
+                </div>
+              </div>
+              <div class="bento-body">
+                <div class="bento-sub-label">语音识别方式</div>
+                <div class="seg-cards seg-3" role="group" aria-label="语音识别方式">
+                  <button type="button" class="seg-card active" data-stt-provider="auto">
+                    <span>智能自动</span>
+                  </button>
+                  <button type="button" class="seg-card" data-stt-provider="webspeech">
+                    <span>系统本地</span>
+                  </button>
+                  <button type="button" class="seg-card" data-stt-provider="whisper">
+                    <span>Whisper API</span>
+                  </button>
+                </div>
+                <div id="hint-stt-provider" class="bento-hint-strip">已配置 API Key 时优先使用 Whisper 精准转写，否则自动使用浏览器本地识别。</div>
+
+                <div class="bento-field" id="row-whisper-model">
+                  <span class="bento-sub-label">Whisper 模型名（云端转写专用）</span>
+                  <input id="set-whisper-model" class="s-input" placeholder="whisper-1" />
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ==================== PAGE 5: 数据与设置 ==================== -->
+          <div id="set-tab-data" class="bento-grid hidden">
+            <!-- Card 1: 存储与云端同步 -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                  </span>
+                  <h3 class="bento-title">存储与同步</h3>
+                </div>
+                <button type="button" id="btn-open-data-dir" class="bento-head-btn">打开目录</button>
+              </div>
+              <div class="bento-body">
+                <div class="bento-sub-label">本地数据目录</div>
+                <div id="settings-data-dir" class="bento-path-box">%APPDATA%\HaruEnglishPet</div>
+
+                <div class="bento-sub-label">云端同步方式</div>
+                <div class="seg-pills seg-4" role="group" aria-label="云端同步方式">
+                  <button type="button" class="seg-pill active" data-cloud-provider="none">仅本地</button>
+                  <button type="button" class="seg-pill" data-cloud-provider="webdav">WebDAV</button>
+                  <button type="button" class="seg-pill" data-cloud-provider="gist">Gist</button>
+                  <button type="button" class="seg-pill" data-cloud-provider="custom">REST</button>
+                </div>
+
+                <div id="cloud-fields" class="cloud-fields-box hidden">
+                  <div class="bento-field" id="row-cloud-endpoint">
+                    <span class="bento-sub-label">云端地址</span>
+                    <input id="set-cloud-endpoint" class="s-input" placeholder="https://dav.jianguoyun.com/dav/HaruEnglishPet/" />
+                  </div>
+                  <div class="bento-field" id="row-cloud-user">
+                    <span class="bento-sub-label">账号用户名</span>
+                    <input id="set-cloud-user" class="s-input" placeholder="your-email@example.com" />
+                  </div>
+                  <div class="bento-field">
+                    <span id="lbl-cloud-token" class="bento-sub-label">应用密码 / Token</span>
+                    <input id="set-cloud-token" type="password" class="s-input" placeholder="密码或 Personal Access Token" />
+                  </div>
+                  <div class="bento-inline-grid-2">
+                    <div class="bento-field">
+                      <span class="bento-sub-label">远程文件名</span>
+                      <input id="set-cloud-filename" class="s-input" value="haru-english-pet-sync.json" />
+                    </div>
+                    <div class="bento-field" id="row-cloud-gist">
+                      <span class="bento-sub-label">Gist ID</span>
+                      <input id="set-cloud-gistid" class="s-input" placeholder="留空自动创建" />
+                    </div>
+                  </div>
+                  <label class="bento-switch-row compact" for="set-cloud-autosync">
+                    <span class="bento-row-title">测验后自动云端同步</span>
+                    <span class="s-switch"><input id="set-cloud-autosync" type="checkbox" /><span class="s-switch-track"></span></span>
+                  </label>
+                  <div class="bento-btn-row">
+                    <button type="button" id="btn-cloud-merge" class="s-btn-primary">双向合并</button>
+                    <button type="button" id="btn-cloud-push" class="s-btn-secondary">上传</button>
+                    <button type="button" id="btn-cloud-pull" class="s-btn-secondary">拉取</button>
+                  </div>
+                  <div id="cloud-sync-status" class="bento-hint-strip">支持 WebDAV / GitHub 私有 Gist / 自定义 REST 同步。</div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Card 2: 备份与重置 -->
+            <section class="bento-card">
+              <div class="bento-head">
+                <div class="bento-head-left">
+                  <span class="bento-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                  </span>
+                  <h3 class="bento-title">备份与重置</h3>
+                </div>
+              </div>
+              <div class="bento-body">
+                <div class="data-mini-stats">
+                  <div class="data-mini-pill"><span>生词记录</span><strong id="data-summary-words">0</strong></div>
+                  <div class="data-mini-pill"><span>词库包</span><strong id="data-summary-packs">0</strong></div>
+                  <div class="data-mini-pill"><span>累计学习</span><strong id="data-summary-hours">0.0h</strong></div>
+                </div>
+
+                <div class="bento-sub-label">本地 JSON 备份</div>
+                <div class="bento-btn-row">
+                  <button type="button" id="btn-export-backup" class="s-btn-secondary">导出学习记录</button>
+                  <button type="button" id="btn-import-backup" class="s-btn-secondary">导入合并备份</button>
+                </div>
+                <div id="backup-status" class="bento-hint-strip">导出包含生词本、学习统计与自定义词库包。</div>
+
+                <div class="bento-danger-zone">
+                  <div>
+                    <div class="bento-row-title">恢复出厂默认设置</div>
+                    <div class="bento-row-desc">重置外观、学习偏好与热键（保留生词本与学习记录）</div>
+                  </div>
+                  <div class="bento-btn-row">
+                    <button type="button" id="btn-reset-settings" class="s-btn-ghost-danger">恢复默认</button>
+                    <button type="button" id="btn-reset-cancel" class="s-btn-ghost hidden">取消</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
 
-      <!-- Tab 3: Study Stats -->
-      <div id="tab-stats" class="modal-body hidden">
-        <div id="stats-dashboard" class="stats-grid"></div>
+      <!-- In-Modal Popover: Import / Custom Live2D Model -->
+      <div id="model-import-dialog" class="cv-subdialog-backdrop hidden">
+        <div class="cv-subdialog">
+          <div class="cv-subdialog-head">
+            <h4>导入自定义 Live2D 模型</h4>
+            <button type="button" id="btn-close-model-dialog" class="win-cap-btn" title="关闭">
+              <svg viewBox="0 0 12 12" width="11" height="11"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div class="cv-subdialog-body">
+            <div class="bento-field">
+              <span class="bento-sub-label">模型地址（本地相对路径或 https:// model3.json）</span>
+              <input id="set-model-url" class="s-input" placeholder="models/haru/haru_greeter_t03.model3.json" />
+            </div>
+            <div class="bento-btn-row">
+              <button type="button" id="btn-browse-model" class="s-btn-secondary">选择本地 .model3.json</button>
+              <button type="button" id="btn-reset-model-url" class="s-btn-ghost">恢复内置 Haru</button>
+            </div>
+            <div id="model-dialog-status" class="bento-hint-strip">支持 Live2D Cubism 4 格式（.model3.json），切换后立即加载生效。</div>
+          </div>
+          <div class="cv-subdialog-foot">
+            <button type="button" id="btn-cancel-model-dialog" class="s-btn-secondary">取消</button>
+            <button type="button" id="btn-apply-model-url" class="s-btn-primary">应用模型</button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Center Modal: Settings (API / Voice / Size / Activity / Cloud Sync) -->
-    <div id="settings-modal" class="center-modal hidden hit-zone">
-      <div class="modal-header">
-        <div class="modal-tabs">
-          <button class="modal-tab active" data-set-tab="general">🎀 桌宠与学习</button>
-          <button class="modal-tab" data-set-tab="api">🤖 自定义 API</button>
-          <button class="modal-tab" data-set-tab="voice">🔊 语音与音色</button>
-          <button class="modal-tab" data-set-tab="cloud">☁️ 云端同步</button>
-        </div>
-        <button class="close-btn" data-close="settings">✕</button>
-      </div>
-
-      <!-- General Tab -->
-      <div id="set-tab-general" class="modal-body form-scroll">
-        <div class="setting-row">
-          <label>桌宠大小 (Pet Size): <strong id="lbl-scale">100%</strong></label>
-          <input id="set-scale" type="range" min="0.6" max="1.8" step="0.05" value="1.0" />
-        </div>
-        <div class="setting-row">
-          <label>活跃度 (Activity Level — 控制待机动作与主动单词测试频率)</label>
-          <select id="set-activity" class="select-input">
-            <option value="quiet">静谧 Quiet (每 25 分钟待机触发测验)</option>
-            <option value="normal">适中 Normal (每 12 分钟待机触发测验)</option>
-            <option value="lively">活跃 Lively (每 5 分钟待机触发测验)</option>
-            <option value="super">超活跃 Super Active (每 2 分钟待机触发测验)</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <label>英语水平 (CEFR Level — 决定对话难度与单词测试范围)</label>
-          <select id="set-level" class="select-input">
-            <option value="A1">A1 入门 (Beginner)</option>
-            <option value="A2">A2 基础 (Elementary)</option>
-            <option value="B1">B1 中级 (Intermediate)</option>
-            <option value="B2">B2 中高级 (Upper-Intermediate)</option>
-            <option value="C1">C1 高级 (Advanced)</option>
-            <option value="C2">C2 精通 (Mastery)</option>
-          </select>
-        </div>
-        <div class="setting-checks">
-          <label><input id="set-topmost" type="checkbox" /> 窗口始终置顶 (Always on Top)</label>
-          <label><input id="set-lock" type="checkbox" /> 锁定桌宠位置 (Lock Position)</label>
-          <label><input id="set-zh-sub" type="checkbox" /> 对话与气泡显示中文辅助翻译</label>
-          <label><input id="set-auto-speak" type="checkbox" /> 自动朗读 Haru 的英文回复</label>
-          <label><input id="set-idle-quiz" type="checkbox" /> 待机过久自动弹出单词小测验</label>
-          <label><input id="set-hourly-praise" type="checkbox" /> 每学习满 1 小时提示并夸奖</label>
-          <label><input id="set-absence-remind" type="checkbox" /> 多日未学习时主动提醒</label>
-        </div>
-        <div class="setting-row">
-          <label>Live2D 模型地址 (Model3 JSON URL)</label>
-          <input id="set-model-url" class="text-input" />
-        </div>
-      </div>
-
-      <!-- API Tab -->
-      <div id="set-tab-api" class="modal-body form-scroll hidden">
-        <div class="setting-row">
-          <label>快捷预设 (OpenAI 兼容接口)</label>
-          <select id="set-api-preset" class="select-input">
-            <option value="openai">OpenAI 官方 (api.openai.com)</option>
-            <option value="deepseek">DeepSeek (api.deepseek.com)</option>
-            <option value="siliconflow">硅基流动 SiliconFlow</option>
-            <option value="gemini">Google Gemini (OpenAI 兼容端点)</option>
-            <option value="ollama">Ollama 本地部署 (localhost:11434)</option>
-            <option value="custom">自定义兼容接口 (Custom)</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <label>API Base URL</label>
-          <input id="set-api-url" class="text-input" placeholder="https://api.openai.com/v1" />
-        </div>
-        <div class="setting-row">
-          <label>API Key</label>
-          <input id="set-api-key" type="password" class="text-input" placeholder="sk-..." />
-        </div>
-        <div class="form-grid-2">
-          <div class="setting-row">
-            <label>对话 / 翻译模型 (Chat Model)</label>
-            <input id="set-api-model" class="text-input" placeholder="gpt-4o-mini / deepseek-chat" />
-          </div>
-          <div class="setting-row">
-            <label>语音转文字模型 (Whisper Model)</label>
-            <input id="set-whisper-model" class="text-input" placeholder="whisper-1" />
-          </div>
-        </div>
-        <div class="toolbar-row">
-          <button id="btn-test-api" class="secondary-btn">🧪 测试 API 连接</button>
-          <span id="api-test-status" class="status-text"></span>
-        </div>
-      </div>
-
-      <!-- Voice Tab -->
-      <div id="set-tab-voice" class="modal-body form-scroll hidden">
-        <div class="setting-row">
-          <label>语音合成引擎 (TTS Provider)</label>
-          <select id="set-tts-provider" class="select-input">
-            <option value="edge">Microsoft Edge 神经网络音色 (免费高质量，自动回退)</option>
-            <option value="openai">OpenAI 兼容 TTS API (/audio/speech)</option>
-            <option value="webspeech">系统本地语音 (完全离线)</option>
-          </select>
-        </div>
-        <div class="setting-row" id="row-edge-voice">
-          <label>选择音色 (精选 9 款高辨识度多口音神经网络音色)</label>
-          <select id="set-edge-voice" class="select-input">
-            <option value="en-US-AnaNeural">🎀 Ana — 甜美动漫少女童音 (US Sweet Anime)</option>
-            <option value="en-US-AvaMultilingualNeural">✨ Ava — 自然知性美式女声 (US Multilingual 中英流畅)</option>
-            <option value="en-GB-SoniaNeural">☕ Sonia — 优雅伦敦英式女声 (UK BBC Accent)</option>
-            <option value="en-IE-EmilyNeural">☘️ Emily — 轻灵爱尔兰女声 (Irish Accent)</option>
-            <option value="en-IN-NeerjaNeural">🪷 Neerja — 清晰印度英语女声 (Indian Accent 听力实战)</option>
-            <option value="en-US-BrianMultilingualNeural">🎙️ Brian — 温暖美式播客男声 (US Male 中英流畅)</option>
-            <option value="en-GB-RyanNeural">🎩 Ryan — 绅士英伦男外教 (UK Male Tutor)</option>
-            <option value="en-AU-WilliamNeural">🦘 William — 阳光澳式男声 (Australian Male)</option>
-            <option value="en-US-ChristopherNeural">🎬 Christopher — 深沉低音旁白男声 (Deep Bass Narrator)</option>
-          </select>
-        </div>
-        <div class="setting-row hidden" id="row-openai-voice">
-          <label>选择 OpenAI TTS 音色</label>
-          <select id="set-openai-voice" class="select-input">
-            <option value="nova">Nova (清亮甜美)</option>
-            <option value="shimmer">Shimmer (柔和温暖)</option>
-            <option value="alloy">Alloy (中性自然)</option>
-            <option value="fable">Fable (英式叙事)</option>
-            <option value="echo">Echo (沉稳男声)</option>
-            <option value="onyx">Onyx (低沉磁性)</option>
-          </select>
-        </div>
-        <div class="setting-row hidden" id="row-webspeech-voice">
-          <label>选择系统本地语音</label>
-          <select id="set-webspeech-voice" class="select-input"></select>
-        </div>
-        <div class="form-grid-2">
-          <div class="setting-row">
-            <label>语速 (Speed): <strong id="lbl-rate">1.0x</strong></label>
-            <input id="set-rate" type="range" min="0.6" max="1.5" step="0.05" value="1.0" />
-          </div>
-          <div class="setting-row">
-            <label>音调 (Pitch): <strong id="lbl-pitch">1.0</strong></label>
-            <input id="set-pitch" type="range" min="0.8" max="1.3" step="0.05" value="1.0" />
-          </div>
-        </div>
-        <div class="setting-row">
-          <label>语音转文字方式 (Speech-to-Text)</label>
-          <select id="set-stt-provider" class="select-input">
-            <option value="auto">智能自动 (有 API Key 优先 Whisper，否则浏览器语音识别)</option>
-            <option value="whisper">强制使用 Whisper API (/audio/transcriptions)</option>
-            <option value="webspeech">浏览器内置实时语音识别 (Web Speech API)</option>
-          </select>
-        </div>
-        <div class="toolbar-row">
-          <button id="btn-preview-voice" class="secondary-btn">🔊 试听当前音色</button>
-          <span id="voice-preview-status" class="status-text"></span>
-        </div>
-      </div>
-
-      <!-- Cloud Sync Tab -->
-      <div id="set-tab-cloud" class="modal-body form-scroll hidden">
-        <div class="setting-row">
-          <label>云端同步方式 (支持配置自己的云端保存词库、学习进度与知识包)</label>
-          <select id="set-cloud-provider" class="select-input">
-            <option value="none">关闭云端同步 (仅本地保存)</option>
-            <option value="webdav">WebDAV (坚果云 / Nextcloud / Alist / 群晖)</option>
-            <option value="gist">GitHub Gist (私有 Gist 免费云同步)</option>
-            <option value="custom">自定义 REST Endpoint (GET / PUT JSON)</option>
-          </select>
-        </div>
-        <div id="cloud-fields">
-          <div class="setting-row" id="row-cloud-endpoint">
-            <label>云端地址 (WebDAV 目录 URL 或 REST URL)</label>
-            <input id="set-cloud-endpoint" class="text-input" placeholder="例如 https://dav.jianguoyun.com/dav/HaruEnglishPet/" />
-          </div>
-          <div class="setting-row" id="row-cloud-user">
-            <label>用户名 (WebDAV 账号)</label>
-            <input id="set-cloud-user" class="text-input" placeholder="your-email@example.com" />
-          </div>
-          <div class="setting-row">
-            <label id="lbl-cloud-token">应用密码 / Token</label>
-            <input id="set-cloud-token" type="password" class="text-input" placeholder="密码或 Personal Access Token" />
-          </div>
-          <div class="form-grid-2">
-            <div class="setting-row">
-              <label>远程文件名</label>
-              <input id="set-cloud-filename" class="text-input" value="haru-english-pet-sync.json" />
-            </div>
-            <div class="setting-row" id="row-cloud-gist">
-              <label>Gist ID (留空首次同步自动创建)</label>
-              <input id="set-cloud-gistid" class="text-input" placeholder="可选" />
-            </div>
-          </div>
-          <div class="setting-checks">
-            <label><input id="set-cloud-autosync" type="checkbox" /> 测验或更新单词后自动云端同步</label>
-          </div>
-          <div class="toolbar-row">
-            <button id="btn-cloud-merge" class="primary-btn">☁️ 双向合并同步</button>
-            <button id="btn-cloud-push" class="secondary-btn">⬆️ 仅上传</button>
-            <button id="btn-cloud-pull" class="secondary-btn">⬇️ 仅拉取</button>
-          </div>
-          <div id="cloud-sync-status" class="status-text"></div>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button id="btn-open-data-dir" class="secondary-btn">📂 打开本地数据目录</button>
-        <div class="footer-right">
-          <button class="secondary-btn" data-close="settings">取消</button>
-          <button id="btn-save-settings" class="primary-btn">💾 保存设置</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Custom Right-Click Context Menu on Pet -->
+    <!-- Custom Right-Click Context Menu on Pet (Unified Minimal Style) -->
     <div id="pet-context-menu" class="context-menu hidden hit-zone">
-      <button data-ctx="chat">💬 英语对话 / 翻译</button>
-      <button data-ctx="actions">🎭 英文表情动作</button>
-      <button data-ctx="quiz">📝 来一组单词测试</button>
-      <button data-ctx="words">📚 不熟练的英文</button>
-      <button data-ctx="settings">⚙️ 设置 (API / 音色 / 云端)</button>
+      <button data-ctx="chat">英语对话 / 翻译</button>
+      <button data-ctx="actions">表情动作词汇</button>
+      <button data-ctx="quiz">开始单词抽查</button>
+      <button data-ctx="words">生词本与知识库</button>
+      <button data-ctx="settings">应用设置</button>
       <div class="ctx-sep"></div>
-      <button data-ctx="hide">👁️ 暂时隐藏桌宠</button>
+      <button data-ctx="hide">暂时隐藏桌宠</button>
     </div>
   </div>
 

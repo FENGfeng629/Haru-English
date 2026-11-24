@@ -4,24 +4,45 @@ namespace HaruEnglishPet.Models;
 
 public class AppSettings
 {
+    public int VocabVersion { get; set; } = 0;
     public double PetScale { get; set; } = 1.0;
-    // quiet | normal | lively | super
+    // off | quiet | normal | lively | super
     public string ActivityLevel { get; set; } = "normal";
     // A1 | A2 | B1 | B2 | C1 | C2
     public string EnglishLevel { get; set; } = "B1";
+    // all | weak | <knowledgePackId>
+    public string QuizPackId { get; set; } = "all";
     public string ModelUrl { get; set; } = "models/haru/haru_greeter_t03.model3.json";
     public bool AlwaysOnTop { get; set; } = true;
     public bool LockPosition { get; set; } = false;
+    public bool FullscreenDnd { get; set; } = true;
     public double PetX { get; set; } = -1; // -1 means auto bottom-right
     public double PetY { get; set; } = -1;
+    // Legacy bool retained for backward compatibility; ChineseSubtitleMode takes precedence when set
     public bool ShowChineseSubtitles { get; set; } = true;
+    // always | hover | hide
+    public string ChineseSubtitleMode { get; set; } = "always";
+    // gentle | strict
+    public string CorrectionStyle { get; set; } = "gentle";
     public bool AutoSpeak { get; set; } = true;
     public bool EnableIdleQuiz { get; set; } = true;
     public bool EnableHourlyPraise { get; set; } = true;
     public bool EnableAbsenceReminder { get; set; } = true;
+    // light | dark | system
+    public string UiTheme { get; set; } = "light";
+    // pink | blue | purple | green (legacy yellow/gray/red still supported in CSS)
+    public string UiBorderColor { get; set; } = "blue";
+    public HotkeyConfig Hotkeys { get; set; } = new();
     public ApiConfig Api { get; set; } = new();
     public VoiceConfig Voice { get; set; } = new();
     public CloudSyncConfig CloudSync { get; set; } = new();
+}
+
+public class HotkeyConfig
+{
+    public string Talk { get; set; } = "Alt+T";
+    public string Quiz { get; set; } = "Alt+Q";
+    public string TogglePet { get; set; } = "Alt+H";
 }
 
 public class ApiConfig
@@ -65,15 +86,20 @@ public class CloudSyncConfig
 public class WeakWord
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..10];
+    public string BookId { get; set; } = "";
     public string Word { get; set; } = "";
     public string Phonetic { get; set; } = "";
+    public string Pos { get; set; } = "";
     public string Meaning { get; set; } = "";
+    public string Category { get; set; } = "";
+    public string Shortcut { get; set; } = "";
     public string Example { get; set; } = "";
-    public string Level { get; set; } = "B1";
+    public string ExampleZh { get; set; } = "";
+    public string Level { get; set; } = "TOEFL";
     public int WrongCount { get; set; } = 1;
     public int CorrectCount { get; set; } = 0;
     public bool Mastered { get; set; } = false;
-    public string Source { get; set; } = "manual"; // quiz | chat | translate | action | manual
+    public string Source { get; set; } = "manual"; // quiz | chat | translate | action | manual | vocab
     public string AddedAt { get; set; } = DateTime.UtcNow.ToString("o");
     public string LastReviewedAt { get; set; } = "";
 }
@@ -95,22 +121,29 @@ public class StudyStats
 
 public class KnowledgeEntry
 {
+    public string Id { get; set; } = "";
+    public string BookId { get; set; } = ""; // toefl_core | blender_3d | custom
     public string Word { get; set; } = "";
     public string Phonetic { get; set; } = "";
+    public string Pos { get; set; } = "";
     public string PartOfSpeech { get; set; } = "";
     public string Meaning { get; set; } = "";
+    public string Category { get; set; } = "";
+    public string Shortcut { get; set; } = "";
     public string Example { get; set; } = "";
-    public string Level { get; set; } = "B1";
+    public string ExampleZh { get; set; } = "";
+    public string Level { get; set; } = "TOEFL";
     public List<string> Tags { get; set; } = new();
 }
 
 public class KnowledgePack
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..10];
+    public string BookId { get; set; } = "";
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
-    public string Level { get; set; } = "B1";
-    public string Category { get; set; } = "vocabulary"; // vocabulary | phrases | grammar | custom
+    public string Level { get; set; } = "TOEFL";
+    public string Category { get; set; } = "vocabulary"; // toefl | blender | vocabulary | custom
     public bool BuiltIn { get; set; } = false;
     public bool Enabled { get; set; } = true;
     public string UpdatedAt { get; set; } = DateTime.UtcNow.ToString("o");

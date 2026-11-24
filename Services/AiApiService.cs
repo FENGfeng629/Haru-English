@@ -16,7 +16,8 @@ public class AiApiService
         string englishLevel,
         string userMessage,
         List<ChatTurn> history,
-        List<WeakWord> weakWords)
+        List<WeakWord> weakWords,
+        string correctionStyle = "gentle")
     {
         if (string.IsNullOrWhiteSpace(api.ApiKey) && !IsLocalEndpoint(api.BaseUrl))
         {
@@ -31,19 +32,23 @@ public class AiApiService
         var weakClause = weakHint.Count > 0
             ? $"Occasionally weave one of these words the learner is practicing into conversation when natural: {string.Join(", ", weakHint)}."
             : "";
+        var isStrict = string.Equals(correctionStyle, "strict", StringComparison.OrdinalIgnoreCase);
+        var correctionRule = isStrict
+            ? "STRICT COACHING MODE: Carefully inspect the user's English for ANY grammar, tense, article, preposition, or unnatural phrasing issues. ALWAYS provide a clear, concise correction plus a more idiomatic native rewrite in the `correction` field (in Chinese + English example)."
+            : "GENTLE CHAT MODE: Prioritize warm, flowing conversation without interrupting. Leave `correction` empty unless there is a clear grammar/spelling mistake worth a brief friendly tip.";
 
         var systemPrompt = $$"""
 You are Haru, a cheerful, warm, encouraging 2D anime desktop pet who helps the user practice English.
 Target learner English level: CEFR {{englishLevel}}.
 - Match your vocabulary, sentence length, and idioms to CEFR {{englishLevel}}.
 - Keep your reply concise (1 to 3 natural spoken English sentences) so it feels like a lively desktop companion.
-- Gently correct noticeable grammar/spelling mistakes in a friendly tip only when helpful.
+- {{correctionRule}}
 - {{weakClause}}
 - ALWAYS respond ONLY as strict JSON with this exact schema (no markdown code fences):
 {
   "replyEn": "Your natural English reply to speak aloud",
   "replyZh": "Natural Chinese translation of your reply",
-  "correction": "Optional gentle English tip or empty string",
+  "correction": "Optional correction/idiomatic rewrite or empty string",
   "emotion": "one of: happy, friendly, shy, surprised, excited, sad, pouting, wink, nod, cheer",
   "vocabulary": [
     { "word": "useful word from reply", "phonetic": "/.../", "meaning": "中文释义", "example": "short example" }
@@ -239,6 +244,7 @@ ALWAYS return ONLY strict JSON (no markdown fences):
 
     public async Task<JsonObject> TestConnectionAsync(ApiConfig api)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var payload = new JsonObject
@@ -251,12 +257,25 @@ ALWAYS return ONLY strict JSON (no markdown fences):
                 }
             };
             var raw = await PostJsonAsync(CombineUrl(api.BaseUrl, "/chat/completions"), api.ApiKey, payload);
+            sw.Stop();
             var reply = ExtractAssistantText(raw);
-            return new JsonObject { ["ok"] = true, ["message"] = $"连接成功！模型回复：{reply.Trim()}" };
+            return new JsonObject
+            {
+                ["ok"] = true,
+                ["latencyMs"] = sw.ElapsedMilliseconds,
+                ["message"] = $"已连接 · {sw.ElapsedMilliseconds}ms",
+                ["reply"] = reply.Trim()
+            };
         }
         catch (Exception ex)
         {
-            return new JsonObject { ["ok"] = false, ["message"] = $"连接失败：{ex.Message}" };
+            sw.Stop();
+            return new JsonObject
+            {
+                ["ok"] = false,
+                ["latencyMs"] = sw.ElapsedMilliseconds,
+                ["message"] = $"连接失败：{ex.Message}"
+            };
         }
     }
 

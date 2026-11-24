@@ -6,6 +6,8 @@ namespace HaruEnglishPet.Services;
 
 public class StorageService
 {
+    public const int CurrentVocabVersion = 2;
+
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -29,30 +31,34 @@ public class StorageService
         KnowledgeDir = Path.Combine(DataDir, "knowledge_packs");
         Directory.CreateDirectory(DataDir);
         Directory.CreateDirectory(KnowledgeDir);
-        EnsureStarterKnowledgePacks();
+        RunVocabMigrationIfNeeded();
+        EnsureDualVocabBooks();
     }
 
     public AppSettings LoadSettings()
     {
         if (!File.Exists(SettingsPath))
         {
-            var defaults = new AppSettings();
+            var defaults = new AppSettings { VocabVersion = CurrentVocabVersion };
             SaveSettings(defaults);
             return defaults;
         }
         try
         {
             var json = File.ReadAllText(SettingsPath);
-            return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+            return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions)
+                ?? new AppSettings { VocabVersion = CurrentVocabVersion };
         }
         catch
         {
-            return new AppSettings();
+            return new AppSettings { VocabVersion = CurrentVocabVersion };
         }
     }
 
     public void SaveSettings(AppSettings settings)
     {
+        if (settings.VocabVersion < CurrentVocabVersion)
+            settings.VocabVersion = CurrentVocabVersion;
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
     }
 
@@ -116,30 +122,116 @@ public class StorageService
             {
                 var json = File.ReadAllText(file);
                 var pack = JsonSerializer.Deserialize<KnowledgePack>(json, JsonOptions);
-                if (pack != null) packs.Add(pack);
+                if (pack != null)
+                {
+                    NormalizePack(pack);
+                    packs.Add(pack);
+                }
             }
             catch
             {
                 // Skip invalid files gracefully
             }
         }
-        return packs.OrderByDescending(p => p.BuiltIn).ThenBy(p => p.Level).ThenBy(p => p.Name).ToList();
+        return packs
+            .OrderByDescending(p => p.Id == "toefl_core")
+            .ThenByDescending(p => p.Id == "blender_3d")
+            .ThenByDescending(p => p.BuiltIn)
+            .ThenBy(p => p.Name)
+            .ToList();
     }
 
     public void SaveKnowledgePack(KnowledgePack pack)
     {
         if (string.IsNullOrWhiteSpace(pack.Id))
             pack.Id = Guid.NewGuid().ToString("N")[..10];
+        if (string.IsNullOrWhiteSpace(pack.BookId))
+            pack.BookId = pack.Id;
         pack.UpdatedAt = DateTime.UtcNow.ToString("o");
-        var safeId = string.Concat(pack.Id.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'));
-        if (string.IsNullOrWhiteSpace(safeId)) safeId = Guid.NewGuid().ToString("N")[..10];
+        NormalizePack(pack);
+        var safeId = SanitizeId(pack.Id);
         var path = Path.Combine(KnowledgeDir, $"{safeId}.json");
         File.WriteAllText(path, JsonSerializer.Serialize(pack, JsonOptions));
     }
 
+    public (int Added, int Total, KnowledgePack TargetPack) ImportVocabEntries(
+        string targetBookId,
+        string? newPackName,
+        string? newPackDesc,
+        string? newPackLevel,
+        List<KnowledgeEntry> incoming)
+    {
+        var all = LoadAllKnowledgePacks();
+        KnowledgePack? target = null;
+
+        if (!string.IsNullOrWhiteSpace(targetBookId) &&
+            !string.Equals(targetBookId, "new", StringComparison.OrdinalIgnoreCase))
+        {
+            target = all.FirstOrDefault(p =>
+                string.Equals(p.Id, targetBookId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p.BookId, targetBookId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (target == null)
+        {
+            var id = $"custom_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds():x}";
+            target = new KnowledgePack
+            {
+                Id = id,
+                BookId = id,
+                Name = string.IsNullOrWhiteSpace(newPackName) ? "自定义词库" : newPackName.Trim(),
+                Description = string.IsNullOrWhiteSpace(newPackDesc) ? "用户导入的 JSON 词库" : newPackDesc.Trim(),
+                Level = string.IsNullOrWhiteSpace(newPackLevel) ? "TOEFL" : newPackLevel.Trim(),
+                Category = "custom",
+                BuiltIn = false,
+                Enabled = true,
+                Entries = new List<KnowledgeEntry>()
+            };
+        }
+
+        var existingKeys = new HashSet<string>(
+            target.Entries
+                .Where(e => !string.IsNullOrWhiteSpace(e.Word))
+                .Select(e => e.Word.Trim().ToLowerInvariant()));
+
+        int added = 0;
+        int seq = target.Entries.Count + 1;
+        foreach (var raw in incoming)
+        {
+            if (raw == null || string.IsNullOrWhiteSpace(raw.Word)) continue;
+            var word = raw.Word.Trim();
+            var key = word.ToLowerInvariant();
+            if (!existingKeys.Add(key)) continue;
+
+            var pos = !string.IsNullOrWhiteSpace(raw.Pos) ? raw.Pos.Trim() : raw.PartOfSpeech.Trim();
+            var entry = new KnowledgeEntry
+            {
+                Id = string.IsNullOrWhiteSpace(raw.Id) ? $"{target.Id}_{seq:D4}" : raw.Id.Trim(),
+                BookId = target.BookId,
+                Word = word,
+                Phonetic = raw.Phonetic?.Trim() ?? "",
+                Pos = pos,
+                PartOfSpeech = pos,
+                Meaning = raw.Meaning?.Trim() ?? "",
+                Category = string.IsNullOrWhiteSpace(raw.Category) ? (target.Id == "blender_3d" ? "Blender · 自定义" : "导入词条") : raw.Category.Trim(),
+                Shortcut = raw.Shortcut?.Trim() ?? "",
+                Example = raw.Example?.Trim() ?? "",
+                ExampleZh = raw.ExampleZh?.Trim() ?? "",
+                Level = string.IsNullOrWhiteSpace(raw.Level) ? target.Level : raw.Level.Trim(),
+                Tags = raw.Tags ?? new List<string>()
+            };
+            target.Entries.Add(entry);
+            seq++;
+            added++;
+        }
+
+        SaveKnowledgePack(target);
+        return (added, target.Entries.Count, target);
+    }
+
     public bool DeleteKnowledgePack(string id)
     {
-        var safeId = string.Concat(id.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'));
+        var safeId = SanitizeId(id);
         var path = Path.Combine(KnowledgeDir, $"{safeId}.json");
         if (File.Exists(path))
         {
@@ -155,7 +247,7 @@ public class StorageService
         var packs = LoadAllKnowledgePacks().Where(p => !p.BuiltIn).ToList();
         return new SyncPayload
         {
-            SchemaVersion = 1,
+            SchemaVersion = CurrentVocabVersion,
             UpdatedAt = DateTime.UtcNow.ToString("o"),
             EnglishLevel = settings.EnglishLevel,
             Stats = LoadStats(),
@@ -202,6 +294,8 @@ public class StorageService
                 if (string.IsNullOrWhiteSpace(existing.Meaning)) existing.Meaning = rw.Meaning;
                 if (string.IsNullOrWhiteSpace(existing.Phonetic)) existing.Phonetic = rw.Phonetic;
                 if (string.IsNullOrWhiteSpace(existing.Example)) existing.Example = rw.Example;
+                if (string.IsNullOrWhiteSpace(existing.Category)) existing.Category = rw.Category;
+                if (string.IsNullOrWhiteSpace(existing.Shortcut)) existing.Shortcut = rw.Shortcut;
             }
             else
             {
@@ -218,109 +312,124 @@ public class StorageService
         }
     }
 
-    private void EnsureStarterKnowledgePacks()
+    /// <summary>
+    /// Version-gated migration (vocabVersion = 2):
+    /// Purges all legacy A1-C2 seed knowledge packs, old weak words, and old word stats
+    /// while strictly preserving user API keys, voice config, appearance, hotkeys, and pet position.
+    /// </summary>
+    private void RunVocabMigrationIfNeeded()
     {
-        var packs = new List<KnowledgePack>
+        AppSettings settings;
+        bool hadSettingsFile = File.Exists(SettingsPath);
+        if (hadSettingsFile)
         {
-            new KnowledgePack
+            try
             {
-                Id = "builtin-a1-a2-daily",
-                Name = "Daily Essentials (A1-A2)",
-                Description = "Everyday core English vocabulary and friendly expressions for beginners.",
-                Level = "A1",
-                Category = "vocabulary",
-                BuiltIn = true,
-                Entries = new List<KnowledgeEntry>
-                {
-                    new() { Word = "cheerful", Phonetic = "/ˈtʃɪrfəl/", PartOfSpeech = "adj.", Meaning = "开朗的，高兴的", Example = "She always has a cheerful smile in the morning.", Level = "A2" },
-                    new() { Word = "curious", Phonetic = "/ˈkjʊriəs/", PartOfSpeech = "adj.", Meaning = "好奇的", Example = "I am curious about how this app works.", Level = "A2" },
-                    new() { Word = "habit", Phonetic = "/ˈhæbɪt/", PartOfSpeech = "n.", Meaning = "习惯", Example = "Studying English for 15 minutes a day is a great habit.", Level = "A2" },
-                    new() { Word = "improve", Phonetic = "/ɪmˈpruːv/", PartOfSpeech = "v.", Meaning = "提高，改善", Example = "Practice every day to improve your speaking skills.", Level = "A2" },
-                    new() { Word = "journey", Phonetic = "/ˈdʒɜːrni/", PartOfSpeech = "n.", Meaning = "旅程", Example = "Learning a language is a wonderful journey.", Level = "A2" },
-                    new() { Word = "polite", Phonetic = "/pəˈlaɪt/", PartOfSpeech = "adj.", Meaning = "有礼貌的", Example = "It is polite to say thank you.", Level = "A1" },
-                    new() { Word = "patient", Phonetic = "/ˈpeɪʃənt/", PartOfSpeech = "adj.", Meaning = "有耐心的", Example = "Be patient with yourself when learning new words.", Level = "A2" },
-                    new() { Word = "remember", Phonetic = "/rɪˈmembər/", PartOfSpeech = "v.", Meaning = "记住", Example = "I can remember this word easily now.", Level = "A1" },
-                    new() { Word = "weather", Phonetic = "/ˈweðər/", PartOfSpeech = "n.", Meaning = "天气", Example = "The weather is sunny and warm today.", Level = "A1" },
-                    new() { Word = "wonderful", Phonetic = "/ˈwʌndərfəl/", PartOfSpeech = "adj.", Meaning = "精彩的，极好的", Example = "You did a wonderful job on the quiz!", Level = "A1" },
-                    new() { Word = "encourage", Phonetic = "/ɪnˈkɜːrɪdʒ/", PartOfSpeech = "v.", Meaning = "鼓励", Example = "Haru will always encourage you to keep going.", Level = "A2" },
-                    new() { Word = "favorite", Phonetic = "/ˈfeɪvərɪt/", PartOfSpeech = "adj.", Meaning = "最喜欢的", Example = "What is your favorite English song?", Level = "A1" }
-                }
-            },
-            new KnowledgePack
-            {
-                Id = "builtin-b1-b2-fluent",
-                Name = "Fluent Conversation (B1-B2)",
-                Description = "Practical intermediate to upper-intermediate words for natural English chats.",
-                Level = "B1",
-                Category = "vocabulary",
-                BuiltIn = true,
-                Entries = new List<KnowledgeEntry>
-                {
-                    new() { Word = "consistent", Phonetic = "/kənˈsɪstənt/", PartOfSpeech = "adj.", Meaning = "坚持不懈的，一致的", Example = "Consistent practice brings remarkable progress.", Level = "B2" },
-                    new() { Word = "enthusiastic", Phonetic = "/ɪnˌθjuːziˈæstɪk/", PartOfSpeech = "adj.", Meaning = "热情的，满腔热忱的", Example = "She sounded very enthusiastic about the trip.", Level = "B2" },
-                    new() { Word = "hesitate", Phonetic = "/ˈhezɪteɪt/", PartOfSpeech = "v.", Meaning = "犹豫，迟疑", Example = "Don't hesitate to ask me if you need a translation.", Level = "B1" },
-                    new() { Word = "accomplish", Phonetic = "/əˈkɑːmplɪʃ/", PartOfSpeech = "v.", Meaning = "完成，实现", Example = "You accomplished a full hour of English study!", Level = "B2" },
-                    new() { Word = "perspective", Phonetic = "/pərˈspektɪv/", PartOfSpeech = "n.", Meaning = "视角，观点", Example = "Reading in English gives you a fresh perspective.", Level = "B2" },
-                    new() { Word = "reluctant", Phonetic = "/rɪˈlʌktənt/", PartOfSpeech = "adj.", Meaning = "不情愿的，勉强的", Example = "He was reluctant to speak aloud at first.", Level = "B2" },
-                    new() { Word = "appreciate", Phonetic = "/əˈpriːʃieɪt/", PartOfSpeech = "v.", Meaning = "感激，欣赏", Example = "I really appreciate your effort today.", Level = "B1" },
-                    new() { Word = "flexible", Phonetic = "/ˈfleksəbəl/", PartOfSpeech = "adj.", Meaning = "灵活的", Example = "Our study schedule is very flexible.", Level = "B1" },
-                    new() { Word = "overcome", Phonetic = "/ˌoʊvərˈkʌm/", PartOfSpeech = "v.", Meaning = "克服，战胜", Example = "With practice, you can overcome shyness.", Level = "B1" },
-                    new() { Word = "memorable", Phonetic = "/ˈmemərəbəl/", PartOfSpeech = "adj.", Meaning = "难忘的", Example = "Today's conversation was truly memorable.", Level = "B1" },
-                    new() { Word = "articulate", Phonetic = "/ɑːrˈtɪkjəleɪt/", PartOfSpeech = "v./adj.", Meaning = "清晰表达；口齿伶俐的", Example = "Try to articulate each syllable clearly.", Level = "B2" },
-                    new() { Word = "spontaneous", Phonetic = "/spɑːnˈteɪniəs/", PartOfSpeech = "adj.", Meaning = "自发的，即兴的", Example = "Spontaneous chats help build real fluency.", Level = "B2" }
-                }
-            },
-            new KnowledgePack
-            {
-                Id = "builtin-c1-c2-advanced",
-                Name = "Advanced Mastery (C1-C2)",
-                Description = "Nuanced, eloquent vocabulary and idioms for advanced English learners.",
-                Level = "C1",
-                Category = "vocabulary",
-                BuiltIn = true,
-                Entries = new List<KnowledgeEntry>
-                {
-                    new() { Word = "eloquent", Phonetic = "/ˈeləkwənt/", PartOfSpeech = "adj.", Meaning = "雄辩的，富有表现力的", Example = "She gave an eloquent speech without any notes.", Level = "C1" },
-                    new() { Word = "ubiquitous", Phonetic = "/juːˈbɪkwɪtəs/", PartOfSpeech = "adj.", Meaning = "无处不在的", Example = "AI assistants have become ubiquitous in daily work.", Level = "C1" },
-                    new() { Word = "serendipity", Phonetic = "/ˌserənˈdɪpəti/", PartOfSpeech = "n.", Meaning = "机缘巧合，意外发现珍奇事物的运气", Example = "Finding this charming study buddy felt like pure serendipity.", Level = "C2" },
-                    new() { Word = "resilient", Phonetic = "/rɪˈzɪliənt/", PartOfSpeech = "adj.", Meaning = "有韧性的，能迅速恢复的", Example = "Resilient learners treat mistakes as stepping stones.", Level = "C1" },
-                    new() { Word = "nuance", Phonetic = "/ˈnuːɑːns/", PartOfSpeech = "n.", Meaning = "细微差别", Example = "Understanding tone and nuance makes your English sound native.", Level = "C1" },
-                    new() { Word = "meticulous", Phonetic = "/məˈtɪkjələs/", PartOfSpeech = "adj.", Meaning = "一丝不苟的，细致的", Example = "She keeps meticulous notes of every unfamiliar idiom.", Level = "C1" },
-                    new() { Word = "ephemeral", Phonetic = "/ɪˈfemərəl/", PartOfSpeech = "adj.", Meaning = "短暂的，转瞬即逝的", Example = "Motivation can be ephemeral, so habits matter more.", Level = "C2" },
-                    new() { Word = "pragmatic", Phonetic = "/præɡˈmætɪk/", PartOfSpeech = "adj.", Meaning = "务实的，实用主义的", Example = "Let's take a pragmatic approach to expanding your vocabulary.", Level = "C1" },
-                    new() { Word = "perspicacious", Phonetic = "/ˌpɜːrspɪˈkeɪʃəs/", PartOfSpeech = "adj.", Meaning = "敏锐的，有洞察力的", Example = "That was a remarkably perspicacious observation.", Level = "C2" },
-                    new() { Word = "conscientious", Phonetic = "/ˌkɑːnʃiˈenʃəs/", PartOfSpeech = "adj.", Meaning = "认真尽责的，勤勉的", Example = "A conscientious student reviews weak words regularly.", Level = "C1" }
-                }
-            },
-            new KnowledgePack
-            {
-                Id = "builtin-phrases-idioms",
-                Name = "Everyday Phrases & Idioms",
-                Description = "High-frequency spoken English expressions you can use immediately in conversation.",
-                Level = "B1",
-                Category = "phrases",
-                BuiltIn = true,
-                Entries = new List<KnowledgeEntry>
-                {
-                    new() { Word = "break the ice", Phonetic = "/breɪk ði aɪs/", PartOfSpeech = "idiom", Meaning = "打破僵局，破冰", Example = "A warm smile is the easiest way to break the ice.", Level = "B1" },
-                    new() { Word = "hang in there", Phonetic = "/hæŋ ɪn ðer/", PartOfSpeech = "phrase", Meaning = "坚持住，别放弃", Example = "Hang in there! You're getting better every day.", Level = "A2" },
-                    new() { Word = "piece of cake", Phonetic = "/piːs əv keɪk/", PartOfSpeech = "idiom", Meaning = "小菜一碟", Example = "After reviewing twice, this quiz is a piece of cake!", Level = "A2" },
-                    new() { Word = "on the same page", Phonetic = "/ɑːn ðə seɪm peɪdʒ/", PartOfSpeech = "idiom", Meaning = "达成共识，想法一致", Example = "Let's review the plan so we're on the same page.", Level = "B2" },
-                    new() { Word = "call it a day", Phonetic = "/kɔːl ɪt ə deɪ/", PartOfSpeech = "idiom", Meaning = "今天就到此为止，收工", Example = "We studied for a whole hour—let's call it a day!", Level = "B1" },
-                    new() { Word = "hit the books", Phonetic = "/hɪt ðə bʊks/", PartOfSpeech = "idiom", Meaning = "用功学习，啃书本", Example = "Time to hit the books for ten minutes!", Level = "B1" },
-                    new() { Word = "figure out", Phonetic = "/ˈfɪɡjər aʊt/", PartOfSpeech = "phrasal v.", Meaning = "弄清楚，想明白", Example = "Together we can figure out any tricky grammar rule.", Level = "B1" },
-                    new() { Word = "keep it up", Phonetic = "/kiːp ɪt ʌp/", PartOfSpeech = "phrase", Meaning = "继续保持，再接再厉", Example = "Amazing pronunciation—keep it up!", Level = "A2" }
-                }
+                var json = File.ReadAllText(SettingsPath);
+                settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
             }
-        };
-
-        foreach (var pack in packs)
-        {
-            var path = Path.Combine(KnowledgeDir, $"{pack.Id}.json");
-            if (!File.Exists(path))
+            catch
             {
-                File.WriteAllText(path, JsonSerializer.Serialize(pack, JsonOptions));
+                settings = new AppSettings();
             }
         }
+        else
+        {
+            settings = new AppSettings();
+        }
+
+        if (settings.VocabVersion >= CurrentVocabVersion)
+            return;
+
+        // 1. Delete all legacy knowledge_packs/*.json files
+        try
+        {
+            foreach (var file in Directory.GetFiles(KnowledgeDir, "*.json"))
+            {
+                try { File.Delete(file); } catch { }
+            }
+        }
+        catch { }
+
+        // 2. Clear legacy weak_words.json
+        SaveWeakWords(new List<WeakWord>());
+
+        // 3. Reset legacy word/quiz statistics for the new TOEFL + Blender dual-vocab system
+        SaveStats(new StudyStats { TodayDate = DateTime.Now.ToString("yyyy-MM-dd") });
+
+        // 4. Preserve ALL user settings (API, Voice, Appearance, Hotkeys, Position, CloudSync),
+        //    only resetting stale QuizPackId and bumping VocabVersion = 2
+        if (settings.QuizPackId is not ("all" or "weak" or "toefl_core" or "blender_3d"))
+        {
+            settings.QuizPackId = "all";
+        }
+        settings.VocabVersion = CurrentVocabVersion;
+        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
+    }
+
+    private void EnsureDualVocabBooks()
+    {
+        var vocabDir = Path.Combine(AppContext.BaseDirectory, "src", "data", "vocab");
+        var seedFiles = new (string fileName, string bookId)[]
+        {
+            ("toefl.json", "toefl_core"),
+            ("blender.json", "blender_3d")
+        };
+
+        foreach (var (fileName, bookId) in seedFiles)
+        {
+            var destPath = Path.Combine(KnowledgeDir, $"{bookId}.json");
+            if (File.Exists(destPath)) continue;
+
+            var srcPath = Path.Combine(vocabDir, fileName);
+            if (!File.Exists(srcPath)) continue;
+
+            try
+            {
+                var json = File.ReadAllText(srcPath);
+                var pack = JsonSerializer.Deserialize<KnowledgePack>(json, JsonOptions);
+                if (pack != null)
+                {
+                    pack.Id = bookId;
+                    pack.BookId = bookId;
+                    pack.BuiltIn = true;
+                    NormalizePack(pack);
+                    File.WriteAllText(destPath, JsonSerializer.Serialize(pack, JsonOptions));
+                }
+            }
+            catch
+            {
+                // Ignore malformed seed file gracefully
+            }
+        }
+    }
+
+    private static void NormalizePack(KnowledgePack pack)
+    {
+        if (string.IsNullOrWhiteSpace(pack.BookId))
+            pack.BookId = pack.Id;
+        if (pack.Entries == null)
+        {
+            pack.Entries = new List<KnowledgeEntry>();
+            return;
+        }
+        for (int i = 0; i < pack.Entries.Count; i++)
+        {
+            var e = pack.Entries[i];
+            if (string.IsNullOrWhiteSpace(e.Id))
+                e.Id = $"{pack.BookId}_{i + 1:D4}";
+            if (string.IsNullOrWhiteSpace(e.BookId))
+                e.BookId = pack.BookId;
+            if (string.IsNullOrWhiteSpace(e.Pos) && !string.IsNullOrWhiteSpace(e.PartOfSpeech))
+                e.Pos = e.PartOfSpeech;
+            if (string.IsNullOrWhiteSpace(e.PartOfSpeech) && !string.IsNullOrWhiteSpace(e.Pos))
+                e.PartOfSpeech = e.Pos;
+        }
+    }
+
+    private static string SanitizeId(string id)
+    {
+        var safeId = string.Concat(id.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'));
+        return string.IsNullOrWhiteSpace(safeId) ? Guid.NewGuid().ToString("N")[..10] : safeId;
     }
 }

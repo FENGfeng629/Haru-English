@@ -225,14 +225,58 @@ window.HaruPet = (() => {
 
   let app = null;
   let model = null;
-  let baseWidth = 310;
-  let baseHeight = 440;
+  let modelBodyBounds = null;
+  let baseWidth = 260;
+  let baseHeight = 460;
   let currentScale = 1.0;
   let lipSyncTarget = 0;
   let lipSyncCurrent = 0;
   let activeChoreo = null; // { kind, startTime, duration }
   let onBodyTapCallback = null;
   let currentModelUrl = "";
+
+  function measureFullBodyBounds(m) {
+    const im = m && m.internalModel;
+    const fallback = {
+      x: 0,
+      y: 0,
+      width: (im && im.originalWidth) || 2400,
+      height: (im && im.originalHeight) || 4500,
+    };
+    if (!im) return fallback;
+    try {
+      if (typeof im.update === "function") im.update(0, performance.now());
+      const ids = typeof im.getDrawableIDs === "function" ? im.getDrawableIDs() : [];
+      const count = ids.length || (im.coreModel && typeof im.coreModel.getDrawableCount === "function" ? im.coreModel.getDrawableCount() : 0);
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      const tmp = {};
+      for (let i = 0; i < count; i++) {
+        const id = ids[i] || "";
+        if (/hitarea/i.test(id)) continue;
+        if (im.coreModel && typeof im.coreModel.getDrawableOpacity === "function" && im.coreModel.getDrawableOpacity(i) <= 0.01) continue;
+        const b = im.getDrawableBounds(i, tmp);
+        if (!Number.isFinite(b.x) || !Number.isFinite(b.y) || b.width <= 0 || b.height <= 0) continue;
+        if (b.x < minX) minX = b.x;
+        if (b.x + b.width > maxX) maxX = b.x + b.width;
+        if (b.y < minY) minY = b.y;
+        if (b.y + b.height > maxY) maxY = b.y + b.height;
+      }
+      if (Number.isFinite(minX) && maxX > minX && maxY > minY) {
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }
+    } catch (e) {
+      console.warn("measureFullBodyBounds fallback:", e);
+    }
+    return fallback;
+  }
+
+  function getDimensions(scale = currentScale) {
+    const s = Math.max(0.45, Math.min(1.65, Number(scale) || 1.0));
+    return {
+      width: Math.round(baseWidth * s),
+      height: Math.round(baseHeight * s),
+    };
+  }
 
   async function init(modelUrl, scale = 1.0) {
     currentScale = scale;
@@ -303,9 +347,15 @@ window.HaruPet = (() => {
         });
 
         app.stage.addChild(model);
+        modelBodyBounds = measureFullBodyBounds(model);
+        if (modelBodyBounds.width > 0 && modelBodyBounds.height > 0) {
+          const aspect = modelBodyBounds.width / modelBodyBounds.height;
+          baseHeight = 460;
+          baseWidth = Math.max(210, Math.min(310, Math.round(baseHeight * aspect) + 26));
+        }
         layoutModel();
         loaderEl.classList.add("hidden");
-        HostBridge.log(`Live2D loaded OK! internal=${model.internalModel.originalWidth}x${model.internalModel.originalHeight} scale=${model.scale.x.toFixed(3)}`);
+        HostBridge.log(`Live2D loaded OK! internal=${model.internalModel.originalWidth}x${model.internalModel.originalHeight} fullBody=${Math.round(modelBodyBounds.width)}x${Math.round(modelBodyBounds.height)} base=${baseWidth}x${baseHeight} scale=${model.scale.x.toFixed(3)}`);
 
         // Friendly welcome animation
         setTimeout(() => performAction("wave"), 400);
@@ -323,26 +373,29 @@ window.HaruPet = (() => {
 
   function layoutModel() {
     if (!app || !model) return;
-    const w = Math.round(baseWidth * currentScale);
-    const h = Math.round(baseHeight * currentScale);
+    const { width: w, height: h } = getDimensions(currentScale);
     app.renderer.resize(w, h);
 
     const wrap = document.getElementById("pet-canvas-wrap");
     wrap.style.width = `${w}px`;
     wrap.style.height = `${h}px`;
 
-    // Fit Haru nicely inside canvas with headroom for hair/bounce
-    const internalW = model.internalModel.originalWidth || 1000;
-    const internalH = model.internalModel.originalHeight || 1400;
-    const fitScale = Math.min((w * 0.98) / internalW, (h * 0.98) / internalH);
+    // Proportionally fit Haru's full body (from hair top to shoes) at EVERY scale
+    const bounds = modelBodyBounds || {
+      x: 0,
+      y: 0,
+      width: model.internalModel.originalWidth || 2400,
+      height: model.internalModel.originalHeight || 4500,
+    };
+    const fitScale = Math.min((w * 0.94) / bounds.width, (h * 0.96) / bounds.height);
+    model.anchor.set(0, 0);
     model.scale.set(fitScale);
-    model.anchor.set(0.5, 0.5);
-    model.x = w * 0.5;
-    model.y = h * 0.52;
+    model.x = (w - bounds.width * fitScale) * 0.5 - bounds.x * fitScale;
+    model.y = (h - bounds.height * fitScale) * 0.5 - bounds.y * fitScale;
   }
 
   function setScale(scale) {
-    currentScale = Math.max(0.55, Math.min(1.85, Number(scale) || 1.0));
+    currentScale = Math.max(0.45, Math.min(1.65, Number(scale) || 1.0));
     layoutModel();
     HostBridge.reportHitRects();
   }
@@ -532,9 +585,11 @@ window.HaruPet = (() => {
 
   return {
     ACTIONS_CATALOG,
+    BODY_REACTIONS,
     init,
     loadModel,
     setScale,
+    getDimensions,
     lookAtGlobal,
     setLipSync,
     performAction,

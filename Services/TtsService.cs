@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -17,13 +18,103 @@ public class TtsService
     private const string EdgeChromiumFullVersion = "143.0.3650.75";
     private const string EdgeChromiumMajorVersion = "143";
     private const string EdgeSecMsGecVersion = "2-" + EdgeChromiumFullVersion;
+    private const int MaxDiskCacheFiles = 250;
+
+    private sealed record CachedAudio(string AudioBase64, string MimeType, string Provider, string Voice);
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(25) };
+    private readonly string _cacheDir;
+    private readonly ConcurrentDictionary<string, CachedAudio> _memCache = new();
+    private readonly ConcurrentDictionary<string, Task<CachedAudio?>> _inflightPrewarm = new();
+    private readonly SemaphoreSlim _prewarmConcurrency = new(3);
+    private readonly SemaphoreSlim _clockSyncLock = new(1, 1);
     private static double _clockSkewSeconds = 0.0;
+    private static bool _clockSyncedOnce = false;
+    private int _diskWriteCount = 0;
 
-    public async Task<JsonObject> SynthesizeAsync(VoiceConfig voice, ApiConfig api, string text)
+    public TtsService(string? dataDir = null)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        var root = string.IsNullOrWhiteSpace(dataDir)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HaruEnglishPet")
+            : dataDir;
+        _cacheDir = Path.Combine(root, "tts_cache");
+        try { Directory.CreateDirectory(_cacheDir); } catch { }
+    }
+
+    public async Task WarmupClockAsync(CancellationToken ct = default)
+    {
+        if (_clockSyncedOnce) return;
+        await _clockSyncLock.WaitAsync(ct);
+        try
+        {
+            if (_clockSyncedOnce) return;
+            await TrySyncServerClockSkewAsync(ct);
+            _clockSyncedOnce = true;
+        }
+        finally
+        {
+            _clockSyncLock.Release();
+        }
+    }
+
+    public async Task PrewarmBatchAsync(IEnumerable<(VoiceConfig voice, string text)> items, ApiConfig api)
+    {
+        try
+        {
+            await WarmupClockAsync();
+        }
+        catch { }
+
+        var tasks = new List<Task>();
+        foreach (var (voice, rawText) in items)
+        {
+            var text = (rawText ?? "").Trim();
+            if (string.IsNullOrEmpty(text)) continue;
+
+            var provider = (voice.TtsProvider ?? "edge").ToLowerInvariant();
+            if (provider == "webspeech") continue;
+
+            var voiceName = provider == "openai"
+                ? (string.IsNullOrWhiteSpace(voice.OpenAiVoice) ? "nova" : voice.OpenAiVoice)
+                : (string.IsNullOrWhiteSpace(voice.EdgeVoice) ? "en-US-AnaNeural" : voice.EdgeVoice);
+
+            var cacheKey = BuildCacheKey(provider, voiceName, voice.SpeechRate, voice.SpeechPitch, text);
+            if (TryGetCached(cacheKey, provider, voiceName, out _)) continue;
+            if (_inflightPrewarm.ContainsKey(cacheKey)) continue;
+
+            var vCopy = voice;
+            var tCopy = text;
+            tasks.Add(Task.Run(async () =>
+            {
+                await _prewarmConcurrency.WaitAsync();
+                try
+                {
+                    if (TryGetCached(cacheKey, provider, voiceName, out _)) return;
+                    var work = _inflightPrewarm.GetOrAdd(cacheKey, _ => SynthesizeAndCacheCoreAsync(vCopy, api, tCopy, provider, voiceName, cacheKey, CancellationToken.None));
+                    try { await work; }
+                    finally { _inflightPrewarm.TryRemove(cacheKey, out _); }
+                }
+                catch { }
+                finally
+                {
+                    _prewarmConcurrency.Release();
+                }
+            }));
+        }
+
+        if (tasks.Count > 0)
+        {
+            try { await Task.WhenAll(tasks); } catch { }
+        }
+    }
+
+    public async Task<JsonObject> SynthesizeAsync(VoiceConfig voice, ApiConfig api, string text, CancellationToken ct = default)
+    {
+        if (ct.IsCancellationRequested)
+            return new JsonObject { ["ok"] = false, ["cancelled"] = true };
+
+        var cleanText = (text ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(cleanText))
             return new JsonObject { ["ok"] = false, ["fallbackToWebSpeech"] = true };
 
         var provider = (voice.TtsProvider ?? "edge").ToLowerInvariant();
@@ -32,11 +123,68 @@ public class TtsService
             return new JsonObject { ["ok"] = false, ["fallbackToWebSpeech"] = true, ["provider"] = "webspeech" };
         }
 
+        var voiceName = provider == "openai"
+            ? (string.IsNullOrWhiteSpace(voice.OpenAiVoice) ? "nova" : voice.OpenAiVoice)
+            : (string.IsNullOrWhiteSpace(voice.EdgeVoice) ? "en-US-AnaNeural" : voice.EdgeVoice);
+
+        var cacheKey = BuildCacheKey(provider, voiceName, voice.SpeechRate, voice.SpeechPitch, cleanText);
+
+        // 1. Instant Memory / Disk cache hit (< 3ms!)
+        if (TryGetCached(cacheKey, provider, voiceName, out var cached))
+        {
+            return BuildSuccessJson(cached);
+        }
+
+        // 2. Join an already-running background prewarm for this exact phrase & voice if one exists
+        if (_inflightPrewarm.TryGetValue(cacheKey, out var inflightTask))
+        {
+            try
+            {
+                var prewarmed = await inflightTask.WaitAsync(ct);
+                if (ct.IsCancellationRequested)
+                    return new JsonObject { ["ok"] = false, ["cancelled"] = true };
+                if (prewarmed != null)
+                    return BuildSuccessJson(prewarmed);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return new JsonObject { ["ok"] = false, ["cancelled"] = true };
+            }
+            catch { }
+        }
+
+        // 3. Ensure clock skew is synced once before Edge TTS (avoids 2.7s cold 403 fail)
+        if (provider == "edge" && !_clockSyncedOnce)
+        {
+            try { await WarmupClockAsync(ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return new JsonObject { ["ok"] = false, ["cancelled"] = true };
+            }
+            catch { }
+        }
+
         if (provider == "openai")
         {
-            var oaResult = await SynthesizeOpenAiAsync(voice, api, text);
-            if (oaResult["ok"]?.GetValue<bool>() == true) return oaResult;
+            var oaResult = await SynthesizeOpenAiAsync(voice, api, cleanText, ct);
+            if (ct.IsCancellationRequested)
+                return new JsonObject { ["ok"] = false, ["cancelled"] = true };
+            if (oaResult["ok"]?.GetValue<bool>() == true)
+            {
+                var b64 = oaResult["audioBase64"]?.ToString();
+                if (!string.IsNullOrEmpty(b64))
+                {
+                    SaveToCache(cacheKey, Convert.FromBase64String(b64), new CachedAudio(b64, "audio/mpeg", "openai", voiceName));
+                }
+                return oaResult;
+            }
             // Fallback to Edge or WebSpeech
+            var edgeFallbackVoice = string.IsNullOrWhiteSpace(voice.EdgeVoice) ? "en-US-AnaNeural" : voice.EdgeVoice;
+            var edgeFallbackKey = BuildCacheKey("edge", edgeFallbackVoice, voice.SpeechRate, voice.SpeechPitch, cleanText);
+            if (TryGetCached(edgeFallbackKey, "edge", edgeFallbackVoice, out var fallbackCached))
+                return BuildSuccessJson(fallbackCached);
+            voiceName = edgeFallbackVoice;
+            cacheKey = edgeFallbackKey;
         }
 
         // Try Microsoft Edge Neural TTS (Free high-quality neural English voices, Sec-MS-GEC v2)
@@ -44,38 +192,49 @@ public class TtsService
         string? lastError = null;
         for (int attempt = 0; attempt < 2; attempt++)
         {
+            if (ct.IsCancellationRequested)
+                return new JsonObject { ["ok"] = false, ["cancelled"] = true };
+
             try
             {
                 var mp3 = await SynthesizeEdgeNeuralAsync(
                     edgeVoice,
-                    text,
+                    cleanText,
                     voice.SpeechRate,
-                    voice.SpeechPitch
+                    voice.SpeechPitch,
+                    ct
                 );
+                if (ct.IsCancellationRequested)
+                    return new JsonObject { ["ok"] = false, ["cancelled"] = true };
                 if (mp3.Length > 0)
                 {
-                    return new JsonObject
-                    {
-                        ["ok"] = true,
-                        ["audioBase64"] = Convert.ToBase64String(mp3),
-                        ["mimeType"] = "audio/mpeg",
-                        ["provider"] = "edge",
-                        ["voice"] = edgeVoice
-                    };
+                    var b64 = Convert.ToBase64String(mp3);
+                    var entry = new CachedAudio(b64, "audio/mpeg", "edge", edgeVoice);
+                    SaveToCache(cacheKey, mp3, entry);
+                    return BuildSuccessJson(entry);
                 }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return new JsonObject { ["ok"] = false, ["cancelled"] = true };
             }
             catch (Exception ex)
             {
+                if (ct.IsCancellationRequested)
+                    return new JsonObject { ["ok"] = false, ["cancelled"] = true };
                 lastError = ex.Message;
                 // On first 403/handshake failure, sync clock skew from Bing server Date header and retry once
                 if (attempt == 0)
                 {
-                    var synced = await TrySyncServerClockSkewAsync();
+                    var synced = await TrySyncServerClockSkewAsync(ct);
                     if (synced) continue;
                 }
                 break;
             }
         }
+
+        if (ct.IsCancellationRequested)
+            return new JsonObject { ["ok"] = false, ["cancelled"] = true };
 
         return new JsonObject
         {
@@ -86,7 +245,129 @@ public class TtsService
         };
     }
 
-    private async Task<bool> TrySyncServerClockSkewAsync()
+    private async Task<CachedAudio?> SynthesizeAndCacheCoreAsync(
+        VoiceConfig voice, ApiConfig api, string text, string provider, string voiceName, string cacheKey, CancellationToken ct)
+    {
+        if (provider == "openai")
+        {
+            var oaRes = await SynthesizeOpenAiAsync(voice, api, text, ct);
+            if (oaRes["ok"]?.GetValue<bool>() == true)
+            {
+                var b64 = oaRes["audioBase64"]?.ToString();
+                if (!string.IsNullOrEmpty(b64))
+                {
+                    var entry = new CachedAudio(b64, "audio/mpeg", "openai", voiceName);
+                    SaveToCache(cacheKey, Convert.FromBase64String(b64), entry);
+                    return entry;
+                }
+            }
+            return null;
+        }
+
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            try
+            {
+                var mp3 = await SynthesizeEdgeNeuralAsync(voiceName, text, voice.SpeechRate, voice.SpeechPitch, ct);
+                if (mp3.Length > 0)
+                {
+                    var b64 = Convert.ToBase64String(mp3);
+                    var entry = new CachedAudio(b64, "audio/mpeg", "edge", voiceName);
+                    SaveToCache(cacheKey, mp3, entry);
+                    return entry;
+                }
+            }
+            catch
+            {
+                if (attempt == 0)
+                {
+                    var synced = await TrySyncServerClockSkewAsync(ct);
+                    if (synced) continue;
+                }
+                break;
+            }
+        }
+        return null;
+    }
+
+    private static string BuildCacheKey(string provider, string voiceName, double rate, double pitch, string text)
+    {
+        var raw = $"{provider}|{voiceName}|{rate:F2}|{pitch:F2}|{text}";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
+        return Convert.ToHexString(hash)[..24].ToLowerInvariant();
+    }
+
+    private static JsonObject BuildSuccessJson(CachedAudio entry) => new()
+    {
+        ["ok"] = true,
+        ["audioBase64"] = entry.AudioBase64,
+        ["mimeType"] = entry.MimeType,
+        ["provider"] = entry.Provider,
+        ["voice"] = entry.Voice
+    };
+
+    private bool TryGetCached(string cacheKey, string provider, string voiceName, out CachedAudio entry)
+    {
+        if (_memCache.TryGetValue(cacheKey, out var mem))
+        {
+            entry = mem;
+            return true;
+        }
+
+        try
+        {
+            var path = Path.Combine(_cacheDir, cacheKey + ".mp3");
+            if (File.Exists(path))
+            {
+                var bytes = File.ReadAllBytes(path);
+                if (bytes.Length > 0)
+                {
+                    entry = new CachedAudio(Convert.ToBase64String(bytes), "audio/mpeg", provider, voiceName);
+                    _memCache[cacheKey] = entry;
+                    try { File.SetLastAccessTimeUtc(path, DateTime.UtcNow); } catch { }
+                    return true;
+                }
+            }
+        }
+        catch { }
+
+        entry = default!;
+        return false;
+    }
+
+    private void SaveToCache(string cacheKey, byte[] mp3Bytes, CachedAudio entry)
+    {
+        _memCache[cacheKey] = entry;
+        try
+        {
+            var path = Path.Combine(_cacheDir, cacheKey + ".mp3");
+            if (!File.Exists(path))
+            {
+                File.WriteAllBytes(path, mp3Bytes);
+                if (Interlocked.Increment(ref _diskWriteCount) % 25 == 0)
+                {
+                    _ = Task.Run(TrimDiskCache);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void TrimDiskCache()
+    {
+        try
+        {
+            var files = new DirectoryInfo(_cacheDir).GetFiles("*.mp3");
+            if (files.Length <= MaxDiskCacheFiles) return;
+            foreach (var f in files.OrderBy(f => f.LastAccessTimeUtc).Take(files.Length - MaxDiskCacheFiles))
+            {
+                try { f.Delete(); } catch { }
+            }
+        }
+        catch { }
+    }
+
+    private async Task<bool> TrySyncServerClockSkewAsync(CancellationToken ct = default)
     {
         try
         {
@@ -97,7 +378,7 @@ public class TtsService
                 "User-Agent",
                 $"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{EdgeChromiumMajorVersion}.0.0.0 Safari/537.36 Edg/{EdgeChromiumMajorVersion}.0.0.0");
 
-            using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+            using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
             if (resp.Headers.Date.HasValue)
             {
                 var serverUnix = resp.Headers.Date.Value.ToUnixTimeSeconds();
@@ -110,6 +391,10 @@ public class TtsService
                 }
             }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch
         {
             // Ignore sync errors
@@ -117,7 +402,7 @@ public class TtsService
         return false;
     }
 
-    private async Task<JsonObject> SynthesizeOpenAiAsync(VoiceConfig voice, ApiConfig api, string text)
+    private async Task<JsonObject> SynthesizeOpenAiAsync(VoiceConfig voice, ApiConfig api, string text, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(api.ApiKey))
             return new JsonObject { ["ok"] = false };
@@ -139,11 +424,11 @@ public class TtsService
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", api.ApiKey);
             req.Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
 
-            using var resp = await _http.SendAsync(req);
+            using var resp = await _http.SendAsync(req, ct);
             if (!resp.IsSuccessStatusCode)
                 return new JsonObject { ["ok"] = false };
 
-            var bytes = await resp.Content.ReadAsByteArrayAsync();
+            var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
             return new JsonObject
             {
                 ["ok"] = true,
@@ -153,15 +438,20 @@ public class TtsService
                 ["voice"] = voiceName
             };
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return new JsonObject { ["ok"] = false, ["cancelled"] = true };
+        }
         catch
         {
             return new JsonObject { ["ok"] = false };
         }
     }
 
-    private static async Task<byte[]> SynthesizeEdgeNeuralAsync(string voiceName, string text, double rate, double pitch)
+    private static async Task<byte[]> SynthesizeEdgeNeuralAsync(string voiceName, string text, double rate, double pitch, CancellationToken ct = default)
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(14));
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(14));
         using var ws = new ClientWebSocket();
 
         var connectionId = Guid.NewGuid().ToString("N");

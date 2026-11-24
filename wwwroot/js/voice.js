@@ -2,8 +2,10 @@
 window.VoiceEngine = (() => {
   let audioCtx = null;
   let currentAudio = null;
+  let currentAudioCancel = null;
   let lipSyncRaf = null;
   let fakeLipTimer = null;
+  let speakSeq = 0;
 
   // STT state
   let isListening = false;
@@ -24,9 +26,17 @@ window.VoiceEngine = (() => {
     return audioCtx;
   }
 
-  function stopSpeaking() {
+  function clearAudioPlaybackOnly() {
+    if (currentAudioCancel) {
+      const fn = currentAudioCancel;
+      currentAudioCancel = null;
+      try { fn(); } catch { }
+    }
     if (currentAudio) {
       try {
+        currentAudio.onplay = null;
+        currentAudio.onended = null;
+        currentAudio.onerror = null;
         currentAudio.pause();
         currentAudio.src = "";
       } catch { }
@@ -46,10 +56,22 @@ window.VoiceEngine = (() => {
     HaruPet.setLipSync(0);
   }
 
+  function stopSpeaking(notifyHost = true) {
+    // Bump generation so any in-flight TTS synthesis RPC or stale audio callback is discarded
+    speakSeq++;
+    if (notifyHost && window.HostBridge && typeof HostBridge.cancelTts === "function") {
+      HostBridge.cancelTts();
+    }
+    clearAudioPlaybackOnly();
+  }
+
   async function speak(text, voiceConfig, onStart) {
     const clean = (text || "").replace(/[*_`#]/g, "").trim();
     if (!clean) return { ok: false, provider: "none" };
-    stopSpeaking();
+
+    // Immediately stop any active speech and cancel any in-flight synthesis request
+    stopSpeaking(true);
+    const mySeq = speakSeq;
 
     const cfg = voiceConfig || {
       ttsProvider: "edge",
@@ -64,20 +86,29 @@ window.VoiceEngine = (() => {
     if (cfg.ttsProvider !== "webspeech") {
       try {
         const res = await HostBridge.rpc("ttsSynthesize", { text: clean, voice: cfg });
+        // Drop stale or superseded synthesis result immediately
+        if (mySeq !== speakSeq || (res && res.cancelled)) {
+          return { ok: false, cancelled: true };
+        }
         if (res && res.ok && res.audioBase64) {
           const info = { ok: true, provider: res.provider || cfg.ttsProvider, voice: res.voice || cfg.edgeVoice };
           if (typeof onStart === "function") onStart(info);
-          await playBase64AudioWithLipSync(res.audioBase64, res.mimeType || "audio/mpeg");
+          await playBase64AudioWithLipSync(res.audioBase64, res.mimeType || "audio/mpeg", mySeq);
           return info;
         }
         fallbackError = (res && res.error) ? res.error : "";
       } catch (e) {
+        if (mySeq !== speakSeq) return { ok: false, cancelled: true };
         fallbackError = e?.message || String(e);
         console.warn("Native TTS fallback to WebSpeech:", e);
       }
     }
 
-    const usedLocalVoice = speakWithWebSpeech(clean, cfg);
+    if (mySeq !== speakSeq) return { ok: false, cancelled: true };
+
+    const usedLocalVoice = speakWithWebSpeech(clean, cfg, mySeq);
+    if (mySeq !== speakSeq) return { ok: false, cancelled: true };
+
     const fallbackInfo = {
       ok: true,
       provider: "webspeech",
@@ -89,23 +120,66 @@ window.VoiceEngine = (() => {
     return fallbackInfo;
   }
 
-  function playBase64AudioWithLipSync(base64, mimeType) {
+  function playBase64AudioWithLipSync(base64, mimeType, seq) {
     return new Promise((resolve) => {
+      if (seq !== speakSeq) {
+        resolve();
+        return;
+      }
+
+      // Guarantee no previous audio element can survive alongside this one
+      clearAudioPlaybackOnly();
+
+      let finished = false;
+      let source = null;
+      let analyser = null;
+      let audio = null;
+
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (currentAudioCancel === finish) currentAudioCancel = null;
+        if (audio) {
+          try {
+            audio.onplay = null;
+            audio.onended = null;
+            audio.onerror = null;
+            audio.pause();
+            audio.src = "";
+          } catch { }
+          if (currentAudio === audio) currentAudio = null;
+          audio = null;
+        }
+        try { source?.disconnect(); } catch { }
+        try { analyser?.disconnect(); } catch { }
+        source = null;
+        analyser = null;
+        if (seq === speakSeq) {
+          if (lipSyncRaf) {
+            cancelAnimationFrame(lipSyncRaf);
+            lipSyncRaf = null;
+          }
+          HaruPet.setLipSync(0);
+        }
+        resolve();
+      };
+
       try {
         const ctx = ensureAudioContext();
-        const audio = new Audio(`data:${mimeType};base64,${base64}`);
+        audio = new Audio(`data:${mimeType};base64,${base64}`);
         currentAudio = audio;
+        currentAudioCancel = finish;
 
-        const source = ctx.createMediaElementSource(audio);
-        const analyser = ctx.createAnalyser();
+        source = ctx.createMediaElementSource(audio);
+        analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
         source.connect(analyser);
         analyser.connect(ctx.destination);
 
         const data = new Uint8Array(analyser.frequencyBinCount);
         const updateLip = () => {
-          if (!currentAudio || currentAudio.paused || currentAudio.ended) {
-            HaruPet.setLipSync(0);
+          if (finished || seq !== speakSeq || currentAudio !== audio || !audio || audio.paused || audio.ended) {
+            if (seq === speakSeq) HaruPet.setLipSync(0);
             return;
           }
           analyser.getByteTimeDomainData(data);
@@ -120,29 +194,26 @@ window.VoiceEngine = (() => {
         };
 
         audio.onplay = () => {
+          if (finished || seq !== speakSeq) {
+            finish();
+            return;
+          }
           lipSyncRaf = requestAnimationFrame(updateLip);
         };
-        audio.onended = () => {
-          stopSpeaking();
-          resolve();
-        };
-        audio.onerror = () => {
-          stopSpeaking();
-          resolve();
-        };
-        audio.play().catch(() => {
-          stopSpeaking();
-          resolve();
-        });
+        audio.onended = () => finish();
+        audio.onerror = () => finish();
+
+        audio.play().catch(() => finish());
       } catch {
-        stopSpeaking();
-        resolve();
+        finish();
       }
     });
   }
 
-  function speakWithWebSpeech(text, cfg) {
-    if (!window.speechSynthesis) return;
+  function speakWithWebSpeech(text, cfg, seq) {
+    if (!window.speechSynthesis || seq !== speakSeq) return "";
+    window.speechSynthesis.cancel();
+
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "en-US";
     utter.rate = Math.max(0.5, Math.min(2, cfg.speechRate || 1.0));
@@ -161,12 +232,23 @@ window.VoiceEngine = (() => {
     if (chosen) utter.voice = chosen;
 
     utter.onstart = () => {
+      if (seq !== speakSeq) return;
+      if (fakeLipTimer) clearInterval(fakeLipTimer);
       fakeLipTimer = setInterval(() => {
+        if (seq !== speakSeq) {
+          clearInterval(fakeLipTimer);
+          fakeLipTimer = null;
+          return;
+        }
         HaruPet.setLipSync(0.2 + Math.random() * 0.65);
       }, 95);
     };
-    utter.onend = () => stopSpeaking();
-    utter.onerror = () => stopSpeaking();
+    utter.onend = () => {
+      if (seq === speakSeq) clearAudioPlaybackOnly();
+    };
+    utter.onerror = () => {
+      if (seq === speakSeq) clearAudioPlaybackOnly();
+    };
     window.speechSynthesis.speak(utter);
     return chosen ? chosen.name : "";
   }

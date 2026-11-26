@@ -1264,6 +1264,7 @@ public partial class MainWindow : Window
             ["settings"] = JsonSerializer.SerializeToNode(_storage.LoadSettings(), StorageService.JsonOptions),
             ["weakWords"] = JsonSerializer.SerializeToNode(_storage.LoadWeakWords(), StorageService.JsonOptions),
             ["stats"] = JsonSerializer.SerializeToNode(_storage.LoadStats(), StorageService.JsonOptions),
+            ["vocabProgress"] = JsonSerializer.SerializeToNode(_storage.LoadVocabProgress(), StorageService.JsonOptions),
             ["knowledgePacks"] = JsonSerializer.SerializeToNode(_storage.LoadAllKnowledgePacks(), StorageService.JsonOptions),
             ["dataDir"] = _storage.DataDir
         };
@@ -1343,6 +1344,7 @@ public partial class MainWindow : Window
                 var settings = _storage.LoadSettings();
                 var weakWords = _storage.LoadWeakWords();
                 var stats = _storage.LoadStats();
+                var vocabProgress = _storage.LoadVocabProgress();
                 var packs = _storage.LoadAllKnowledgePacks();
                 JsonObject? workAreaJson = null;
                 JsonObject? winBoundsJson = null;
@@ -1370,6 +1372,7 @@ public partial class MainWindow : Window
                     ["settings"] = JsonSerializer.SerializeToNode(settings, StorageService.JsonOptions),
                     ["weakWords"] = JsonSerializer.SerializeToNode(weakWords, StorageService.JsonOptions),
                     ["stats"] = JsonSerializer.SerializeToNode(stats, StorageService.JsonOptions),
+                    ["vocabProgress"] = JsonSerializer.SerializeToNode(vocabProgress, StorageService.JsonOptions),
                     ["knowledgePacks"] = JsonSerializer.SerializeToNode(packs, StorageService.JsonOptions),
                     ["dataDir"] = _storage.DataDir,
                     ["knowledgeDir"] = _storage.KnowledgeDir,
@@ -1424,6 +1427,16 @@ public partial class MainWindow : Window
                     ?? new StudyStats();
                 _storage.SaveStats(stats);
                 if (!fromSettingsWindow) SyncStateToSettingsWindow();
+                return new JsonObject { ["ok"] = true };
+            }
+
+            case "saveVocabProgress":
+            {
+                var store = JsonSerializer.Deserialize<VocabProgressStore>(payload.ToJsonString(), StorageService.JsonOptions)
+                    ?? new VocabProgressStore();
+                _storage.SaveVocabProgress(store);
+                if (fromSettingsWindow) SyncStateToPetWindow();
+                else SyncStateToSettingsWindow();
                 return new JsonObject { ["ok"] = true };
             }
 
@@ -1580,7 +1593,19 @@ public partial class MainWindow : Window
                     ? JsonSerializer.Deserialize<List<ChatTurn>>(payload["history"]!.ToJsonString(), StorageService.JsonOptions) ?? new()
                     : new List<ChatTurn>();
                 var weak = _storage.LoadWeakWords();
-                return await _ai.ChatAsync(settings.Api, settings.EnglishLevel, userMsg, history, weak, settings.CorrectionStyle);
+                var progress = _storage.LoadVocabProgress();
+                var activePool = progress.Items.Values
+                    .Where(p => p.Status is "learning" or "reviewing" && !string.IsNullOrWhiteSpace(p.Word))
+                    .OrderByDescending(p => p.UnlockedDate == DateTime.Now.ToString("yyyy-MM-dd"))
+                    .ThenBy(p => p.NextReviewAt)
+                    .Select(p => p.Word)
+                    .ToList();
+                // Pick 2-3 varied words from current learning/reviewing pool for natural dialogue reinforcement
+                var rng = Random.Shared;
+                var activeStudyWords = activePool.Count <= 3
+                    ? activePool
+                    : activePool.Take(10).OrderBy(_ => rng.Next()).Take(3).ToList();
+                return await _ai.ChatAsync(settings.Api, settings.EnglishLevel, userMsg, history, weak, settings.CorrectionStyle, activeStudyWords);
             }
 
             case "aiTranslate":

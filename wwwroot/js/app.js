@@ -27,6 +27,7 @@
     settings: null,
     weakWords: [],
     stats: null,
+    vocabProgress: { dailyDate: "", dailyQueue: [], dailyGoalCelebratedDate: "", items: {} },
     knowledgePacks: [],
     dataDir: "",
     fullscreenDndActive: false,
@@ -56,7 +57,9 @@
     state.settings = { ...defaultSettings(), ...(init.settings || {}) };
     state.weakWords = init.weakWords || [];
     state.stats = { ...defaultStats(), ...(init.stats || {}) };
+    state.vocabProgress = normalizeVocabProgress(init.vocabProgress);
     state.knowledgePacks = init.knowledgePacks || [];
+    ensureDailyActivePool(false);
     state.dataDir = init.dataDir || "";
     state.activeModal = "settings";
 
@@ -94,7 +97,9 @@
       if (msg?.settings) state.settings = { ...defaultSettings(), ...msg.settings };
       if (msg?.weakWords) state.weakWords = msg.weakWords;
       if (msg?.stats) state.stats = { ...defaultStats(), ...msg.stats };
+      if (msg?.vocabProgress) state.vocabProgress = normalizeVocabProgress(msg.vocabProgress);
       if (msg?.knowledgePacks) state.knowledgePacks = msg.knowledgePacks;
+      updateDailyProgressBadges();
       if (msg?.dataDir) state.dataDir = msg.dataDir;
       if (typeof msg?.maximized === "boolean") {
         applySettingsMaximized(msg.maximized, true);
@@ -110,6 +115,7 @@
       if (msg?.settings) state.settings = { ...defaultSettings(), ...msg.settings };
       if (msg?.weakWords) state.weakWords = msg.weakWords;
       if (msg?.stats) state.stats = { ...defaultStats(), ...msg.stats };
+      if (msg?.vocabProgress) state.vocabProgress = normalizeVocabProgress(msg.vocabProgress);
       if (msg?.knowledgePacks) state.knowledgePacks = msg.knowledgePacks;
       applyAppearance(state.settings.uiTheme, state.settings.uiBorderColor);
       updateSidebarStatus();
@@ -142,7 +148,9 @@
     state.settings = { ...defaultSettings(), ...(init.settings || {}) };
     state.weakWords = init.weakWords || [];
     state.stats = { ...defaultStats(), ...(init.stats || {}) };
+    state.vocabProgress = normalizeVocabProgress(init.vocabProgress);
     state.knowledgePacks = init.knowledgePacks || [];
+    ensureDailyActivePool(false);
     state.dataDir = init.dataDir || "";
     if (init.workArea && init.workArea.width > 0 && init.workArea.height > 0) {
       state.workArea = init.workArea;
@@ -217,7 +225,9 @@
       const prevSettings = state.settings || defaultSettings();
       if (msg?.weakWords) state.weakWords = msg.weakWords;
       if (msg?.stats) state.stats = { ...defaultStats(), ...msg.stats };
+      if (msg?.vocabProgress) state.vocabProgress = normalizeVocabProgress(msg.vocabProgress);
       if (msg?.knowledgePacks) state.knowledgePacks = msg.knowledgePacks;
+      updateDailyProgressBadges();
       if (msg?.settings) {
         const next = { ...defaultSettings(), ...msg.settings };
         const scaleChanged = Math.abs((prevSettings.petScale || 1) - (next.petScale || 1)) > 0.005;
@@ -363,6 +373,8 @@
       activityLevel: "normal",
       englishLevel: "B1",
       quizPackId: "all",
+      dailyNewWordsGoal: 10,
+      dailyFocusRatio: "balanced",
       modelUrl: "models/haru/haru_greeter_t03.model3.json",
       alwaysOnTop: true,
       lockPosition: false,
@@ -1399,7 +1411,12 @@
 
     const enDiv = document.createElement("div");
     enDiv.className = "chat-msg-text";
-    enDiv.textContent = replyEn;
+    // Render **target word** injected from the learner's active vocab pool as highlighted bold
+    const safeEn = escapeHtml(replyEn || "").replace(
+      /\*\*([^*]+)\*\*/g,
+      '<strong class="chat-vocab-highlight">$1</strong>'
+    );
+    enDiv.innerHTML = safeEn;
     div.appendChild(enDiv);
 
     if (replyZh) {
@@ -1532,13 +1549,299 @@
     });
   }
 
-  // ==================== PROACTIVE IDLE WORD QUIZ (TOEFL + BLENDER 3D + ANTIGRAVITY + WEAK WORDS) ====================
+  // ==================== SRS DAILY ACTIVE POOL + TEACH MODE + 3-TIER PROGRESSIVE QUIZ ====================
+  const SRS_TEN_MIN_MS = 10 * 60 * 1000;
+  const SRS_ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  const SRS_THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+  function normalizeVocabProgress(raw) {
+    const today = todayStr();
+    const store = raw && typeof raw === "object" ? raw : {};
+    return {
+      dailyDate: store.dailyDate || today,
+      dailyQueue: Array.isArray(store.dailyQueue) ? [...store.dailyQueue] : [],
+      dailyGoalCelebratedDate: store.dailyGoalCelebratedDate || "",
+      items: store.items && typeof store.items === "object" ? { ...store.items } : {}
+    };
+  }
+
+  function saveVocabProgress() {
+    HostBridge.rpc("saveVocabProgress", state.vocabProgress);
+    updateDailyProgressBadges();
+  }
+
+  function buildAllEntriesIndex() {
+    const map = new Map();
+    const byBook = { toefl: [], blender: [], antigravity: [], all: [] };
+    (state.knowledgePacks || []).forEach((pack) => {
+      if (pack.enabled === false) return;
+      const bId = pack.bookId || pack.id || "custom";
+      (pack.entries || []).forEach((e) => {
+        if (!e || !e.word || !e.meaning) return;
+        const key = e.word.trim().toLowerCase();
+        if (map.has(key)) return;
+        const norm = {
+          id: e.id || "",
+          bookId: e.bookId || bId,
+          word: e.word.trim(),
+          phonetic: e.phonetic || "",
+          pos: e.pos || e.partOfSpeech || "",
+          meaning: e.meaning.trim(),
+          category: e.category || "",
+          shortcut: e.shortcut || "",
+          example: e.example || "",
+          exampleZh: e.exampleZh || "",
+          level: e.level || pack.level || "TOEFL",
+          _bookName: pack.name || getBookDisplayName(bId)
+        };
+        map.set(key, norm);
+        byBook.all.push(norm);
+        if (norm.bookId === "toefl" || norm.bookId === "toefl_core") byBook.toefl.push(norm);
+        else if (norm.bookId === "blender" || norm.bookId === "blender_3d") byBook.blender.push(norm);
+        else if (norm.bookId === "antigravity") byBook.antigravity.push(norm);
+      });
+    });
+    return { map, byBook };
+  }
+
+  function getWordProgress(key) {
+    if (!key) return null;
+    const k = key.trim().toLowerCase();
+    return state.vocabProgress?.items?.[k] || null;
+  }
+
+  function upsertWordProgress(entry, patch) {
+    const key = (entry.word || entry.key || "").trim().toLowerCase();
+    if (!key) return null;
+    const prev = state.vocabProgress.items[key] || {
+      key,
+      bookId: entry.bookId || "",
+      word: entry.word || "",
+      status: "unseen",
+      seenCount: 0,
+      streak: 0,
+      nextReviewAt: 0,
+      wrongCount: 0,
+      correctCount: 0,
+      unlockedDate: todayStr(),
+      lastReviewedAt: ""
+    };
+    const next = { ...prev, ...patch, key, word: entry.word || prev.word, bookId: entry.bookId || prev.bookId };
+    state.vocabProgress.items[key] = next;
+    return next;
+  }
+
+  function computeDailyTargets(goal, ratio, activeBook) {
+    if (ratio === "single_book" && ["toefl", "blender", "antigravity"].includes(activeBook)) {
+      return {
+        toefl: activeBook === "toefl" ? goal : 0,
+        blender: activeBook === "blender" ? goal : 0,
+        antigravity: activeBook === "antigravity" ? goal : 0
+      };
+    }
+    if (ratio === "toefl_heavy") {
+      const bl = Math.max(1, Math.round(goal * 0.1));
+      const ag = Math.max(1, Math.round(goal * 0.1));
+      return { toefl: Math.max(0, goal - bl - ag), blender: bl, antigravity: ag };
+    }
+    if (ratio === "software_heavy") {
+      const bl = Math.max(1, Math.round(goal * 0.3));
+      const ag = Math.max(1, Math.round(goal * 0.3));
+      return { toefl: Math.max(0, goal - bl - ag), blender: bl, antigravity: ag };
+    }
+    // balanced (default): TOEFL majority + Blender & Antigravity guaranteed floor (e.g. 10 -> 6 + 2 + 2)
+    const swEach = goal <= 5 ? 1 : goal >= 20 ? 4 : 2;
+    return {
+      toefl: Math.max(0, goal - swEach * 2),
+      blender: swEach,
+      antigravity: swEach
+    };
+  }
+
+  function ensureDailyActivePool(shouldPersist = true) {
+    if (!state.knowledgePacks || state.knowledgePacks.length === 0) return;
+    const today = todayStr();
+    const vp = state.vocabProgress || normalizeVocabProgress(null);
+    state.vocabProgress = vp;
+
+    let changed = false;
+    if (vp.dailyDate !== today) {
+      vp.dailyDate = today;
+      vp.dailyQueue = [];
+      changed = true;
+    }
+
+    const goal = Math.max(1, Number(state.settings?.dailyNewWordsGoal) || 10);
+    const ratio = state.settings?.dailyFocusRatio || "balanced";
+    const { map, byBook } = buildAllEntriesIndex();
+
+    // Prune keys that no longer exist in packs
+    const cleanQueue = vp.dailyQueue.filter((k) => map.has(k));
+    if (cleanQueue.length !== vp.dailyQueue.length) {
+      vp.dailyQueue = cleanQueue;
+      changed = true;
+    }
+
+    if (vp.dailyQueue.length < goal) {
+      const needed = goal - vp.dailyQueue.length;
+      const targets = computeDailyTargets(goal, ratio, state.settings?.quizPackId || "all");
+      const inQueueSet = new Set(vp.dailyQueue);
+
+      const countInQueue = (bId) => vp.dailyQueue.reduce((n, k) => {
+        const e = map.get(k);
+        return n + (e && e.bookId === bId ? 1 : 0);
+      }, 0);
+
+      const unlockFromList = (list, count) => {
+        let added = 0;
+        for (const e of list) {
+          if (added >= count) break;
+          const k = e.word.toLowerCase();
+          if (inQueueSet.has(k)) continue;
+          const prog = vp.items[k];
+          if (prog && prog.status !== "unseen") continue;
+          inQueueSet.add(k);
+          vp.dailyQueue.push(k);
+          upsertWordProgress(e, { status: "unseen", unlockedDate: today });
+          added++;
+          changed = true;
+        }
+        return added;
+      };
+
+      const wantBlender = Math.max(0, targets.blender - countInQueue("blender"));
+      const wantAg = Math.max(0, targets.antigravity - countInQueue("antigravity"));
+      const wantToefl = Math.max(0, targets.toefl - countInQueue("toefl"));
+
+      let unlocked = 0;
+      unlocked += unlockFromList(byBook.blender, Math.min(wantBlender, needed - unlocked));
+      unlocked += unlockFromList(byBook.antigravity, Math.min(wantAg, needed - unlocked));
+      unlocked += unlockFromList(byBook.toefl, Math.min(wantToefl, needed - unlocked));
+
+      // Fill any remainder from all enabled entries in natural wordRank order
+      if (unlocked < needed) {
+        unlockFromList(byBook.all, needed - unlocked);
+      }
+    }
+
+    if (changed && shouldPersist) {
+      saveVocabProgress();
+    } else {
+      updateDailyProgressBadges();
+    }
+  }
+
+  function unlockExtraDailyWords(count = 5, preferredBook = "all") {
+    const today = todayStr();
+    const { byBook } = buildAllEntriesIndex();
+    const vp = state.vocabProgress;
+    const inQueueSet = new Set(vp.dailyQueue);
+    const sourceList = (preferredBook && byBook[preferredBook]?.length) ? byBook[preferredBook] : byBook.all;
+    let added = 0;
+    for (const e of sourceList) {
+      if (added >= count) break;
+      const k = e.word.toLowerCase();
+      if (inQueueSet.has(k)) continue;
+      const prog = vp.items[k];
+      if (prog && prog.status !== "unseen") continue;
+      inQueueSet.add(k);
+      vp.dailyQueue.push(k);
+      upsertWordProgress(e, { status: "unseen", unlockedDate: today });
+      added++;
+    }
+    if (added > 0) saveVocabProgress();
+    return added;
+  }
+
+  function getDailyProgressStats(bookFilter = "all") {
+    const now = Date.now();
+    const goal = Math.max(1, Number(state.settings?.dailyNewWordsGoal) || 10);
+    const vp = state.vocabProgress || normalizeVocabProgress(null);
+    const { map } = buildAllEntriesIndex();
+
+    let taughtToday = 0;
+    let unseenToday = 0;
+    for (const k of vp.dailyQueue || []) {
+      const prog = vp.items[k];
+      if (!prog || prog.status === "unseen") unseenToday++;
+      else taughtToday++;
+    }
+
+    let dueCount = 0;
+    let activeCount = 0;
+    let earliestNext = Infinity;
+    Object.values(vp.items || {}).forEach((p) => {
+      if (!p || !map.has(p.key)) return;
+      if (bookFilter !== "all" && bookFilter !== "weak" && p.bookId !== bookFilter) return;
+      if (p.status === "learning" || p.status === "reviewing") {
+        activeCount++;
+        const nextAt = Number(p.nextReviewAt) || 0;
+        if (nextAt <= now) dueCount++;
+        else if (nextAt < earliestNext) earliestNext = nextAt;
+      }
+    });
+
+    return {
+      goal,
+      taughtToday,
+      unseenToday,
+      dueCount,
+      activeCount,
+      earliestNextReviewAt: Number.isFinite(earliestNext) ? earliestNext : 0
+    };
+  }
+
+  function updateDailyProgressBadges() {
+    const st = getDailyProgressStats("all");
+    const dockBadge = document.getElementById("dock-quiz-badge");
+    if (dockBadge) {
+      dockBadge.textContent = `${st.taughtToday}/${st.goal}`;
+      dockBadge.classList.toggle("has-due", st.dueCount > 0);
+      dockBadge.classList.toggle("done", st.dueCount === 0 && st.taughtToday >= st.goal);
+      dockBadge.title = st.dueCount > 0
+        ? `今日进度 ${st.taughtToday}/${st.goal} · 有 ${st.dueCount} 个词到期可复习`
+        : `今日进度 ${st.taughtToday}/${st.goal}`;
+    }
+    const sbWords = document.getElementById("sb-today-words");
+    if (sbWords) {
+      sbWords.textContent = `${st.taughtToday} / ${st.goal}`;
+    }
+  }
+
+  function maybeCelebrateDailyGoal() {
+    const today = todayStr();
+    const st = getDailyProgressStats("all");
+    if (st.taughtToday >= st.goal && state.vocabProgress.dailyGoalCelebratedDate !== today) {
+      state.vocabProgress.dailyGoalCelebratedDate = today;
+      saveVocabProgress();
+      HaruPet.performAction("cheer");
+      showBubble(
+        `Awesome! You completed today's ${st.goal}-word goal! I'm so proud of you!`,
+        `太棒啦！你已经完成了今天的 ${st.goal} 词学习目标，Haru 为你鼓掌庆祝！🎉`,
+        { badge: "🎯 今日目标达成", speak: state.settings?.autoSpeak !== false, duration: 9000 }
+      );
+    }
+  }
+
+  function formatRelativeReviewTime(nextAt) {
+    if (!nextAt) return "";
+    const diffMs = nextAt - Date.now();
+    if (diffMs <= 0) return "已到期复习";
+    const mins = Math.ceil(diffMs / 60000);
+    if (mins < 60) return `${mins} 分钟后复习`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours} 小时后复习`;
+    const days = Math.round(hours / 24);
+    return `${days} 天后复习`;
+  }
+
   function getBookDisplayName(bookId) {
+    if (bookId === "daily") return "今日词袋";
     if (bookId === "toefl" || bookId === "toefl_core") return "托福 TOEFL";
     if (bookId === "blender" || bookId === "blender_3d") return "Blender 3D";
     if (bookId === "antigravity") return "Antigravity";
     if (bookId === "weak") return "个人生词本";
-    if (bookId === "all") return "混合抽查";
+    if (bookId === "all") return "混合学习";
     const found = (state.knowledgePacks || []).find((p) => p.id === bookId || p.bookId === bookId);
     return found ? found.name : "自定义词库";
   }
@@ -1554,7 +1857,6 @@
     document.querySelectorAll("[data-quiz-book]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const nextBook = btn.dataset.quizBook || "all";
-        if (state.settings.quizPackId === nextBook && state.activePanel === "quiz") return;
         state.settings.quizPackId = nextBook;
         syncQuizBookButtons(nextBook);
         HostBridge.rpc("saveSettings", state.settings);
@@ -1563,128 +1865,309 @@
     });
   }
 
-  function buildQuizPool(weakOnly = false, bookOverride = null) {
-    const quizPackId = bookOverride || (weakOnly ? "weak" : (state.settings?.quizPackId || "all"));
-    const effectiveWeakOnly = weakOnly || quizPackId === "weak";
-    const pool = [];
-    const seen = new Set();
+  function collectDueReviewItems(activeBook, allowEarly = false) {
+    const now = Date.now();
+    const { map } = buildAllEntriesIndex();
+    const vp = state.vocabProgress;
+    const due = [];
 
-    // 1. Prioritize unmastered Weak Words (when mode is all or weak)
-    if (quizPackId === "all" || effectiveWeakOnly) {
+    if (activeBook === "weak") {
+      // Weak words have already been seen/missed by the user
       (state.weakWords || [])
         .filter((w) => !w.mastered && w.word && w.meaning)
         .forEach((w) => {
-          const key = w.word.toLowerCase();
-          if (!seen.has(key)) {
-            seen.add(key);
-            pool.push({
-              ...w,
-              pos: w.pos || "",
-              bookId: w.bookId || "weak",
-              category: w.category || "",
-              shortcut: w.shortcut || "",
-              exampleZh: w.exampleZh || "",
-              isWeak: true,
-              priority: 3 + (w.wrongCount || 1)
-            });
-          }
-        });
-    }
-
-    if (!effectiveWeakOnly || pool.length < 4) {
-      // 2. Pull entries from selected book (toefl_core / blender_3d / custom) or all enabled packs
-      const packs = quizPackId !== "all" && quizPackId !== "weak"
-        ? (state.knowledgePacks || []).filter((p) => p.id === quizPackId || p.bookId === quizPackId)
-        : (state.knowledgePacks || []).filter((p) => p.enabled !== false);
-      packs.forEach((pack) => {
-        const bId = pack.bookId || pack.id || "custom";
-        (pack.entries || []).forEach((e) => {
-          if (!e.word || !e.meaning) return;
-          const key = e.word.toLowerCase();
-          if (seen.has(key)) return;
-          seen.add(key);
-          pool.push({
-            id: e.id || "",
-            bookId: e.bookId || bId,
-            word: e.word,
-            phonetic: e.phonetic || "",
-            pos: e.pos || e.partOfSpeech || "",
-            meaning: e.meaning,
-            category: e.category || "",
-            shortcut: e.shortcut || "",
-            example: e.example || "",
-            exampleZh: e.exampleZh || "",
-            level: e.level || pack.level || "TOEFL",
-            isWeak: false,
-            priority: 2
+          const k = w.word.trim().toLowerCase();
+          const prog = vp.items[k];
+          const base = map.get(k) || {
+            id: w.id || "",
+            bookId: w.bookId || "weak",
+            word: w.word,
+            phonetic: w.phonetic || "",
+            pos: w.pos || "",
+            meaning: w.meaning,
+            category: w.category || "",
+            shortcut: w.shortcut || "",
+            example: w.example || "",
+            exampleZh: w.exampleZh || ""
+          };
+          due.push({
+            ...base,
+            streak: prog?.streak || 0,
+            status: prog?.status || "learning",
+            nextReviewAt: prog?.nextReviewAt || 0,
+            isWeak: true
           });
         });
-      });
+      return due;
     }
 
-    return pool;
+    Object.values(vp.items || {}).forEach((p) => {
+      if (!p || (p.status !== "learning" && p.status !== "reviewing")) return;
+      const entry = map.get(p.key);
+      if (!entry) return;
+      if (activeBook !== "all" && entry.bookId !== activeBook) return;
+      const nextAt = Number(p.nextReviewAt) || 0;
+      if (allowEarly || nextAt <= now) {
+        due.push({
+          ...entry,
+          streak: p.streak || 0,
+          status: p.status,
+          nextReviewAt: nextAt,
+          isWeak: (p.wrongCount || 0) > 0
+        });
+      }
+    });
+
+    due.sort((a, b) => (a.nextReviewAt || 0) - (b.nextReviewAt || 0));
+    return due;
   }
 
-  function startWordQuiz(weakOnly = false, isProactiveIdle = false, bookOverride = null) {
+  function collectUnseenDailyItems(activeBook) {
+    const { map } = buildAllEntriesIndex();
+    const vp = state.vocabProgress;
+    const list = [];
+    for (const k of vp.dailyQueue || []) {
+      const entry = map.get(k);
+      if (!entry) continue;
+      if (activeBook !== "all" && activeBook !== "weak" && entry.bookId !== activeBook) continue;
+      const prog = vp.items[k];
+      if (!prog || prog.status === "unseen") {
+        list.push(entry);
+      }
+    }
+    return list;
+  }
+
+  function startWordQuiz(weakOnly = false, isProactiveIdle = false, bookOverride = null, options = {}) {
+    ensureDailyActivePool(true);
     const activeBook = bookOverride || (weakOnly ? "weak" : (state.settings?.quizPackId || "all"));
-    const pool = buildQuizPool(weakOnly, activeBook);
     syncQuizBookButtons(activeBook);
 
-    if (pool.length < 4) {
-      showBubble(
-        "This vocabulary book needs at least 4 words to start a quiz!",
-        `「${getBookDisplayName(activeBook)}」词条不足 4 个，请切换其他词库或导入更多单词。`,
-        { badge: "Quiz" }
-      );
+    const { byBook } = buildAllEntriesIndex();
+    const allowEarly = !!options.earlyReview;
+
+    // 1. Priority 1: Due spaced-repetition reviews (STRICTLY learning/reviewing — NEVER unseen!)
+    const dueReviews = collectDueReviewItems(activeBook, allowEarly);
+    if (dueReviews.length > 0) {
+      const questions = dueReviews.slice(0, 4);
+      if (typeof VoiceEngine.prewarm === "function") {
+        VoiceEngine.prewarm(questions.map((x) => x.word), state.settings.voice);
+      }
+      state.quiz = {
+        mode: "quiz",
+        bookId: activeBook,
+        questions,
+        allPool: byBook.all,
+        index: 0,
+        correct: 0,
+        missed: [],
+        answered: false
+      };
+
+      closeModals();
+      toggleFloatingPanel("quiz", true);
+      HaruPet.performAction("excited");
+
+      if (isProactiveIdle) {
+        showBubble(
+          `Time for a quick spaced-repetition review! You have ${dueReviews.length} word(s) ready.`,
+          `有 ${dueReviews.length} 个学过的单词到期该复习啦，来巩固一下吧！`,
+          { badge: "间隔复习", speak: false }
+        );
+      }
+      renderQuizQuestion();
       return;
     }
 
-    // Weighted shuffle favoring weak words
-    const weighted = pool
-      .map((item) => ({ item, score: Math.random() * item.priority }))
-      .sort((a, b) => b.score - a.score);
-
-    const questions = weighted.slice(0, 4).map((w) => w.item);
-    // Prewarm TTS for all 4 quiz words immediately so speaker clicks & next questions play instantaneously
-    if (typeof VoiceEngine.prewarm === "function") {
-      VoiceEngine.prewarm(questions.map((x) => x.word), state.settings.voice);
+    // 2. Priority 2: Teach Mode for untaught unseen words in Today's Daily Active Pool
+    let unseenToday = activeBook === "weak" ? [] : collectUnseenDailyItems(activeBook);
+    // If user explicitly switched to a specific book that has no unseen words in today's bag yet, unlock 3 on-demand
+    if (unseenToday.length === 0 && !isProactiveIdle && ["toefl", "blender", "antigravity"].includes(activeBook) && options.autoUnlockBook !== false) {
+      const st = getDailyProgressStats(activeBook);
+      if (st.activeCount === 0) {
+        unlockExtraDailyWords(3, activeBook);
+        unseenToday = collectUnseenDailyItems(activeBook);
+      }
     }
-    state.quiz = {
-      bookId: activeBook,
-      questions,
-      allPool: pool,
-      index: 0,
-      correct: 0,
-      missed: [],
-      answered: false
-    };
 
+    if (unseenToday.length > 0) {
+      if (typeof VoiceEngine.prewarm === "function") {
+        VoiceEngine.prewarm(unseenToday.slice(0, 4).map((x) => x.word), state.settings.voice);
+      }
+      state.quiz = {
+        mode: "teach",
+        bookId: activeBook,
+        teachQueue: unseenToday,
+        index: 0
+      };
+
+      closeModals();
+      toggleFloatingPanel("quiz", true);
+      HaruPet.performAction("friendly");
+
+      if (isProactiveIdle) {
+        showBubble(
+          `Here is a new word from your daily bag! Let's learn it together first.`,
+          `Haru 来给你投喂今天的新词啦～先认一认，10 分钟后再抽查哦！`,
+          { badge: "每日喂词", speak: false }
+        );
+      }
+      renderTeachCard();
+      return;
+    }
+
+    // 3. Priority 3: All caught up (today's bag taught & no reviews due yet)
     closeModals();
     toggleFloatingPanel("quiz", true);
-    HaruPet.performAction("excited");
+    renderCaughtUpCard(activeBook);
+  }
 
-    if (isProactiveIdle) {
-      const bookLabel = getBookDisplayName(activeBook);
-      const firstQ = questions[0];
-      const shortcutTip = firstQ?.shortcut
-        ? `（快捷键/命令：${firstQ.shortcut}）`
-        : "";
-      showBubble(
-        `You've been quiet for a while! Let's do a quick ${bookLabel} quiz!`,
-        `你待机有一会儿啦～来做一组「${bookLabel}」单词抽查吧！${shortcutTip}`,
-        { badge: "Idle Quiz", speak: false }
-      );
+  function renderTeachCard() {
+    const q = state.quiz;
+    const body = document.getElementById("quiz-body");
+    const prog = document.getElementById("quiz-progress-text");
+    const titleEl = document.getElementById("quiz-card-title");
+
+    if (!q || q.index >= q.teachQueue.length) {
+      renderCaughtUpCard(q?.bookId || "all");
+      return;
     }
 
-    renderQuizQuestion();
+    const cur = q.teachQueue[q.index];
+    const st = getDailyProgressStats("all");
+    const bookName = getBookDisplayName(cur.bookId);
+
+    if (titleEl) titleEl.textContent = "Haru 每日喂词";
+    if (prog) prog.textContent = `今日进度 ${st.taughtToday} / ${st.goal} · ${bookName} · 新词认读`;
+
+    const metaBadges = [];
+    if (cur.pos) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.pos)}</span>`);
+    if (cur.category) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.category)}</span>`);
+
+    body.innerHTML = `
+      <div class="teach-card">
+        <div class="quiz-word-box">
+          <div class="quiz-word" style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;">
+            <span>${escapeHtml(cur.word)}</span>
+            ${cur.shortcut ? `<kbd class="word-kbd" title="快捷键 / 命令">${escapeHtml(cur.shortcut)}</kbd>` : ""}
+            <button id="teach-say-btn" class="icon-mini-btn" title="发音">${SPEAKER_SVG}</button>
+          </div>
+          ${cur.phonetic ? `<div class="quiz-phonetic">${escapeHtml(cur.phonetic)}</div>` : ""}
+          ${metaBadges.length ? `<div class="quiz-meta-badges">${metaBadges.join("")}</div>` : ""}
+          <div class="teach-meaning">${escapeHtml(cur.meaning)}</div>
+          ${cur.example ? `
+            <div class="teach-example-box">
+              <div class="teach-example-en">"${escapeHtml(cur.example)}"</div>
+              ${cur.exampleZh ? `<div class="teach-example-zh">${escapeHtml(cur.exampleZh)}</div>` : ""}
+            </div>
+          ` : ""}
+        </div>
+        <div class="teach-actions">
+          <button type="button" id="btn-teach-remember" class="teach-btn-remember">记住了（10分钟后考）</button>
+          <button type="button" id="btn-teach-master" class="teach-btn-master">本来就会</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("teach-say-btn").onclick = () => VoiceEngine.speak(cur.word, state.settings.voice);
+    if (state.settings.autoSpeak) VoiceEngine.speak(cur.word, state.settings.voice);
+
+    document.getElementById("btn-teach-remember").onclick = () => {
+      markUserInteraction();
+      recordActiveStudySeconds(15);
+      const prev = getWordProgress(cur.word);
+      upsertWordProgress(cur, {
+        status: "learning",
+        seenCount: (prev?.seenCount || 0) + 1,
+        streak: 0,
+        nextReviewAt: Date.now() + SRS_TEN_MIN_MS,
+        lastReviewedAt: new Date().toISOString()
+      });
+      saveVocabProgress();
+      HaruPet.performAction("nod");
+      maybeCelebrateDailyGoal();
+      q.index++;
+      renderTeachCard();
+    };
+
+    document.getElementById("btn-teach-master").onclick = () => {
+      markUserInteraction();
+      recordActiveStudySeconds(8);
+      const prev = getWordProgress(cur.word);
+      upsertWordProgress(cur, {
+        status: "mastered",
+        seenCount: (prev?.seenCount || 0) + 1,
+        streak: 3,
+        nextReviewAt: 0,
+        lastReviewedAt: new Date().toISOString()
+      });
+      saveVocabProgress();
+      HaruPet.performAction("wink");
+      maybeCelebrateDailyGoal();
+      q.index++;
+      renderTeachCard();
+    };
+
+    HostBridge.reportHitRects();
+  }
+
+  function renderCaughtUpCard(activeBook) {
+    const body = document.getElementById("quiz-body");
+    const prog = document.getElementById("quiz-progress-text");
+    const titleEl = document.getElementById("quiz-card-title");
+    const st = getDailyProgressStats(activeBook);
+    const allSt = getDailyProgressStats("all");
+
+    if (titleEl) titleEl.textContent = "今日学习状态";
+    if (prog) prog.textContent = `今日进度 ${allSt.taughtToday} / ${allSt.goal} · ${getBookDisplayName(activeBook)}`;
+
+    const nextHint = st.earliestNextReviewAt
+      ? `下一批到期复习：${formatRelativeReviewTime(st.earliestNextReviewAt)}`
+      : (activeBook === "weak" ? "个人生词本暂无待巩固词条。" : "今日词袋已全部投喂完毕！");
+
+    body.innerHTML = `
+      <div class="quiz-caughtup-box">
+        <div class="quiz-caughtup-title">${allSt.taughtToday >= allSt.goal ? "🎉 今日新词已全部学完" : "✨ 暂无到期复习词"}</div>
+        <div class="quiz-caughtup-sub">${escapeHtml(nextHint)}<br/>已学在学/待复习词：${st.activeCount} 词（绝不盲考未学词）</div>
+        <div class="toolbar-row" style="justify-content:center;gap:8px;flex-wrap:wrap;">
+          ${st.activeCount > 0 ? `<button type="button" id="btn-early-review" class="primary-btn">提前复习已学词</button>` : ""}
+          ${activeBook !== "weak" ? `<button type="button" id="btn-unlock-more" class="secondary-btn">再解锁 5 个新词</button>` : ""}
+        </div>
+      </div>
+    `;
+
+    const earlyBtn = document.getElementById("btn-early-review");
+    if (earlyBtn) {
+      earlyBtn.onclick = () => startWordQuiz(activeBook === "weak", false, activeBook, { earlyReview: true });
+    }
+    const moreBtn = document.getElementById("btn-unlock-more");
+    if (moreBtn) {
+      moreBtn.onclick = () => {
+        const added = unlockExtraDailyWords(5, activeBook);
+        if (added > 0) startWordQuiz(false, false, activeBook, { autoUnlockBook: false });
+      };
+    }
+    HostBridge.reportHitRects();
+  }
+
+  function createClozeSentence(example, word) {
+    if (!example || !word) return "";
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\b${escaped}\\w*\\b`, "gi");
+    const safe = escapeHtml(example);
+    if (re.test(example)) {
+      return safe.replace(new RegExp(`\\b${escaped}\\w*\\b`, "gi"), '<span class="quiz-cloze-blank">______</span>');
+    }
+    return safe;
   }
 
   function renderQuizQuestion() {
     const q = state.quiz;
     const body = document.getElementById("quiz-body");
     const prog = document.getElementById("quiz-progress-text");
+    const titleEl = document.getElementById("quiz-card-title");
 
-    if (q.index >= q.questions.length) {
+    if (!q || q.index >= q.questions.length) {
       finishQuiz();
       return;
     }
@@ -1692,56 +2175,128 @@
     const cur = q.questions[q.index];
     q.answered = false;
     const bookName = getBookDisplayName(cur.bookId || q.bookId);
-    prog.textContent = `Question ${q.index + 1} / ${q.questions.length} · ${bookName}${cur.isWeak ? " · 重点复习" : ""}`;
+    const streak = cur.streak || 0;
 
-    // Prefer distractors from the same book when available so options feel realistic
+    // 3-Tier Progressive Mode based on streak:
+    //   streak === 0 -> Stage 1: EN -> ZH (看英选义)
+    //   streak === 1 -> Stage 2: Cloze / ZH -> EN (语境/释义选英)
+    //   streak >= 2  -> Stage 3: Shortcut/Command match (for Blender/Antigravity) OR Active Cloze Recall (for TOEFL)
+    const isShortcutStage = streak >= 2 && !!cur.shortcut;
+    const stageType = streak === 0 ? "en2zh" : (isShortcutStage ? "shortcut" : "zh2en");
+    const stageLabel = streak === 0
+      ? "第 1 阶 · 看英选义"
+      : streak === 1
+      ? "第 2 阶 · 语境选词"
+      : (isShortcutStage ? "第 3 阶 · 快捷键实战" : "第 3 阶 · 终极巩固");
+
+    if (titleEl) titleEl.textContent = "间隔复习抽查";
+    if (prog) prog.textContent = `Question ${q.index + 1} / ${q.questions.length} · ${bookName}`;
+
     const sameBook = q.allPool.filter(
-      (x) => (x.bookId === cur.bookId) && x.word.toLowerCase() !== cur.word.toLowerCase() && x.meaning !== cur.meaning
+      (x) => x.bookId === cur.bookId && x.word.toLowerCase() !== cur.word.toLowerCase()
     );
     const otherPool = q.allPool.filter(
-      (x) => x.word.toLowerCase() !== cur.word.toLowerCase() && x.meaning !== cur.meaning
+      (x) => x.word.toLowerCase() !== cur.word.toLowerCase()
     );
-    const distractorSource = sameBook.length >= 3 ? sameBook : otherPool;
-    const distractors = distractorSource
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 3)
-      .map((x) => x.meaning);
+    const source = sameBook.length >= 3 ? sameBook : otherPool;
 
-    const options = [cur.meaning, ...distractors].sort(() => Math.random() - 0.5);
+    let correctAnswer = "";
+    let options = [];
+    if (stageType === "en2zh") {
+      correctAnswer = cur.meaning;
+      const dist = source
+        .filter((x) => x.meaning && x.meaning !== cur.meaning)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3)
+        .map((x) => x.meaning);
+      options = [correctAnswer, ...dist].sort(() => Math.random() - 0.5);
+    } else if (stageType === "shortcut") {
+      correctAnswer = cur.shortcut;
+      const shortcutPool = q.allPool.filter(
+        (x) => x.shortcut && x.shortcut.toLowerCase() !== cur.shortcut.toLowerCase()
+      );
+      const uniqueDist = [];
+      const seenSc = new Set([cur.shortcut.toLowerCase()]);
+      for (const x of shortcutPool.sort(() => Math.random() - 0.5)) {
+        const scKey = x.shortcut.toLowerCase();
+        if (!seenSc.has(scKey)) {
+          seenSc.add(scKey);
+          uniqueDist.push(x.shortcut);
+          if (uniqueDist.length >= 3) break;
+        }
+      }
+      options = [correctAnswer, ...uniqueDist].sort(() => Math.random() - 0.5);
+    } else {
+      correctAnswer = cur.word;
+      const dist = source
+        .filter((x) => x.word.toLowerCase() !== cur.word.toLowerCase())
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3)
+        .map((x) => x.word);
+      options = [correctAnswer, ...dist].sort(() => Math.random() - 0.5);
+    }
 
-    const metaBadges = [];
+    const metaBadges = [`<span class="quiz-stage-pill">${stageLabel}</span>`];
     if (cur.pos) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.pos)}</span>`);
     if (cur.category) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.category)}</span>`);
 
-    body.innerHTML = `
-      <div class="quiz-word-box">
+    let promptHtml = "";
+    if (stageType === "en2zh") {
+      promptHtml = `
         <div class="quiz-word" style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;">
           <span>${escapeHtml(cur.word)}</span>
           ${cur.shortcut ? `<kbd class="word-kbd" title="快捷键 / 命令">${escapeHtml(cur.shortcut)}</kbd>` : ""}
           <button id="quiz-say-btn" class="icon-mini-btn" title="发音">${SPEAKER_SVG}</button>
         </div>
         ${cur.phonetic ? `<div class="quiz-phonetic">${escapeHtml(cur.phonetic)}</div>` : ""}
-        ${metaBadges.length ? `<div class="quiz-meta-badges">${metaBadges.join("")}</div>` : ""}
+        <div class="quiz-meta-badges">${metaBadges.join("")}</div>
         ${cur.example ? `<div class="quiz-hint">"${escapeHtml(cur.example)}"</div>` : ""}
-      </div>
+      `;
+    } else if (stageType === "shortcut") {
+      promptHtml = `
+        <div class="quiz-word" style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;">
+          <span>${escapeHtml(cur.word)}</span>
+          <button id="quiz-say-btn" class="icon-mini-btn" title="发音">${SPEAKER_SVG}</button>
+        </div>
+        <div class="quiz-meta-badges">${metaBadges.join("")}</div>
+        <div class="teach-meaning" style="font-size:13px;">${escapeHtml(cur.meaning)}</div>
+        <div class="quiz-hint">请选择该操作对应的快捷键 / 命令：</div>
+      `;
+    } else {
+      const cloze = cur.example ? createClozeSentence(cur.example, cur.word) : "";
+      promptHtml = `
+        <div class="quiz-meta-badges">${metaBadges.join("")}</div>
+        <div class="teach-meaning" style="display:inline-flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap;">
+          <span>${escapeHtml(cur.meaning)}</span>
+          <button id="quiz-say-btn" class="icon-mini-btn" title="听音提示">${SPEAKER_SVG}</button>
+        </div>
+        ${cloze ? `<div class="quiz-hint">"${cloze}"</div>` : ""}
+      `;
+    }
+
+    body.innerHTML = `
+      <div class="quiz-word-box">${promptHtml}</div>
       <div class="quiz-options"></div>
+      <div id="quiz-wrong-box" class="quiz-wrong-feedback hidden"></div>
     `;
 
-    document.getElementById("quiz-say-btn").onclick = () => VoiceEngine.speak(cur.word, state.settings.voice);
+    const sayBtn = document.getElementById("quiz-say-btn");
+    if (sayBtn) sayBtn.onclick = () => VoiceEngine.speak(cur.word, state.settings.voice);
     if (state.settings.autoSpeak) VoiceEngine.speak(cur.word, state.settings.voice);
 
     const optWrap = body.querySelector(".quiz-options");
     options.forEach((optText) => {
       const btn = document.createElement("button");
       btn.className = "quiz-opt-btn";
+      if (stageType === "shortcut") btn.style.fontFamily = "ui-monospace, Consolas, monospace";
       btn.textContent = optText;
-      btn.onclick = () => handleQuizAnswer(btn, optText === cur.meaning, cur, optWrap);
+      btn.onclick = () => handleQuizAnswer(btn, optText === correctAnswer, cur, optWrap, correctAnswer);
       optWrap.appendChild(btn);
     });
     HostBridge.reportHitRects();
   }
 
-  function handleQuizAnswer(clickedBtn, isCorrect, cur, optWrap) {
+  function handleQuizAnswer(clickedBtn, isCorrect, cur, optWrap, correctAnswer) {
     if (state.quiz.answered) return;
     state.quiz.answered = true;
     markUserInteraction();
@@ -1749,29 +2304,74 @@
 
     optWrap.querySelectorAll("button").forEach((b) => {
       b.disabled = true;
-      if (b.textContent === cur.meaning) b.classList.add("correct");
+      if (b.textContent === correctAnswer) b.classList.add("correct");
     });
+
+    const now = Date.now();
+    const prev = getWordProgress(cur.word);
 
     if (isCorrect) {
       state.quiz.correct++;
       state.stats.totalQuizCorrect++;
-      HaruPet.performAction("nod");
-      // Increment correct count if in weak words
+      const nextStreak = (prev?.streak || 0) + 1;
+      let nextStatus = "reviewing";
+      let nextReviewAt = now + SRS_ONE_DAY_MS;
+      if (nextStreak === 1) {
+        nextStatus = "reviewing";
+        nextReviewAt = now + SRS_ONE_DAY_MS; // +1 day
+      } else if (nextStreak === 2) {
+        nextStatus = "reviewing";
+        nextReviewAt = now + SRS_THREE_DAYS_MS; // +3 days
+      } else {
+        nextStatus = "mastered";
+        nextReviewAt = 0;
+      }
+
+      upsertWordProgress(cur, {
+        status: nextStatus,
+        streak: nextStreak,
+        correctCount: (prev?.correctCount || 0) + 1,
+        nextReviewAt,
+        lastReviewedAt: new Date().toISOString()
+      });
+      saveVocabProgress();
+      HaruPet.performAction(nextStatus === "mastered" ? "cheer" : "nod");
+
+      // Sync mastery to weakWords if present
       const existing = state.weakWords.find((w) => w.word.toLowerCase() === cur.word.toLowerCase());
       if (existing) {
         existing.correctCount = (existing.correctCount || 0) + 1;
         existing.lastReviewedAt = new Date().toISOString();
-        if (existing.correctCount >= 3 && existing.correctCount >= existing.wrongCount) {
-          existing.mastered = true;
-        }
+        if (nextStatus === "mastered") existing.mastered = true;
         saveWeakWords();
       }
     } else {
       clickedBtn.classList.add("wrong");
       state.quiz.missed.push(cur);
       state.stats.totalQuizWrong++;
+
+      // Reset streak to 0 and schedule re-quiz in 10 minutes
+      upsertWordProgress(cur, {
+        status: "learning",
+        streak: 0,
+        wrongCount: (prev?.wrongCount || 0) + 1,
+        nextReviewAt: now + SRS_TEN_MIN_MS,
+        lastReviewedAt: new Date().toISOString()
+      });
+      saveVocabProgress();
       HaruPet.performAction("shake");
-      // Automatically add missed word to Weak Words (preserving TOEFL / Blender metadata & shortcut!)
+
+      // Immediately show correct meaning & example feedback
+      const wrongBox = document.getElementById("quiz-wrong-box");
+      if (wrongBox) {
+        wrongBox.classList.remove("hidden");
+        wrongBox.innerHTML = `
+          <div><strong>${escapeHtml(cur.word)}</strong>${cur.shortcut ? ` <kbd class="word-kbd">${escapeHtml(cur.shortcut)}</kbd>` : ""} — ${escapeHtml(cur.meaning)}</div>
+          ${cur.example ? `<div style="margin-top:4px;font-style:italic;color:var(--text-sub);">"${escapeHtml(cur.example)}"</div>` : ""}
+          <div style="margin-top:3px;font-size:11px;color:var(--accent);">已重置连对并安排 10 分钟后再次巩固</div>
+        `;
+      }
+
       addOrUpdateWeakWord({
         bookId: cur.bookId || "",
         word: cur.word,
@@ -1790,34 +2390,33 @@
     setTimeout(() => {
       state.quiz.index++;
       renderQuizQuestion();
-    }, 950);
+    }, isCorrect ? 900 : 1900);
   }
 
   function finishQuiz() {
     const q = state.quiz;
     const total = q.questions.length;
     const score = q.correct;
-    const ratio = score / total;
+    const ratio = total > 0 ? score / total : 1;
 
     state.stats.quizzesCompleted++;
     saveStats();
     maybeAutoCloudSync();
+    updateDailyProgressBadges();
 
     let enMsg, zhMsg, action;
     if (score === total) {
-      // 全对 -> 夸奖!
       action = "cheer";
-      enMsg = `Perfect ${score} out of ${total}! You are absolutely brilliant! I'm so proud of you!`;
-      zhMsg = `哇！全对啦（${score}/${total}）！你简直太厉害了，Haru 为你骄傲！🎉`;
+      enMsg = `Perfect ${score} out of ${total}! Your spaced repetition memory is getting super strong!`;
+      zhMsg = `哇！全对啦（${score}/${total}）！答对的词已自动拉长复习间隔，Haru 为你骄傲！🎉`;
     } else if (ratio >= 0.5) {
       action = "happy";
-      enMsg = `Nice work! You got ${score} out of ${total}. I saved the missed word to your Weak Words so we can master it together!`;
-      zhMsg = `不错哦（${score}/${total}）！答错的单词已经自动放进「不熟练的英文」里啦，一起攻克它吧！`;
+      enMsg = `Nice work! You got ${score} out of ${total}. I'll re-test the missed word in 10 minutes!`;
+      zhMsg = `不错哦（${score}/${total}）！答错的词已安排 10 分钟后再次巩固并收入生词本！`;
     } else {
-      // 错误多 -> 鼓励!
       action = "shy";
-      enMsg = `Don't be discouraged! Getting ${score} out of ${total} is how we grow. I saved those words for review—you've totally got this!`;
-      zhMsg = `别灰心呀（${score}/${total}）！犯错正是进步的开始，我已经把这些不熟练的单词收好啦，Haru 会一直陪你加油的！💕`;
+      enMsg = `Don't worry! Getting ${score} out of ${total} is part of learning. We'll review them again soon!`;
+      zhMsg = `别灰心呀（${score}/${total}）！答错的词已重置并安排 10 分钟后再复习，很快就能记住！💕`;
     }
 
     HaruPet.performAction(action);
@@ -1828,14 +2427,14 @@
       <div class="quiz-summary">
         <div class="quiz-score-big">${score} / ${total}</div>
         <p style="margin:8px 0;font-size:13px;color:var(--text-main);">${escapeHtml(zhMsg)}</p>
-        ${q.missed.length ? `<p style="font-size:12px;color:var(--accent);margin-bottom:10px;">已自动收录不熟练单词：${q.missed.map((m) => escapeHtml(m.word)).join(", ")}</p>` : ""}
+        ${q.missed.length ? `<p style="font-size:12px;color:var(--accent);margin-bottom:10px;">10分钟后复测：${q.missed.map((m) => escapeHtml(m.word)).join(", ")}</p>` : ""}
         <div class="toolbar-row" style="justify-content:center;margin-top:10px;">
-          <button id="quiz-again-btn" class="primary-btn">再来一组</button>
+          <button id="quiz-again-btn" class="primary-btn">继续学习</button>
           <button id="quiz-close-btn" class="secondary-btn">完成</button>
         </div>
       </div>
     `;
-    document.getElementById("quiz-again-btn").onclick = () => startWordQuiz(false);
+    document.getElementById("quiz-again-btn").onclick = () => startWordQuiz(false, false, q.bookId);
     document.getElementById("quiz-close-btn").onclick = closeFloatingPanels;
     HostBridge.reportHitRects();
   }
@@ -1935,6 +2534,9 @@
         recordActiveStudySeconds(10);
       }
 
+      // Refresh daily progress & due-review badge periodically (e.g. when a 10m review becomes due)
+      updateDailyProgressBadges();
+
       // Autonomous idle motion
       idleMotionCounter += 10;
       if (idleMotionCounter >= actCfg.idleMotionSec) {
@@ -1978,13 +2580,13 @@
   const VOCAB_PAGE_SIZE = 30;
   let vocabSearchDebounceTimer = null;
   const vocabView = {
-    book: "all", // all | weak | toefl | blender | antigravity
+    book: "daily", // daily | all | weak | toefl | blender | antigravity
     filtered: [],
     renderedCount: 0,
   };
 
   function selectVocabBook(bookId) {
-    const valid = ["all", "weak", "toefl", "blender", "antigravity"].includes(bookId) ? bookId : "all";
+    const valid = ["daily", "all", "weak", "toefl", "blender", "antigravity"].includes(bookId) ? bookId : "daily";
     vocabView.book = valid;
     document.querySelectorAll("[data-vocab-book]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.vocabBook === valid);
@@ -1997,7 +2599,7 @@
     }
     const quizBtn = document.getElementById("btn-quiz-weak");
     if (quizBtn) {
-      quizBtn.textContent = isWeak ? "专攻生词测验" : "抽查当前词库";
+      quizBtn.textContent = isWeak ? "专攻生词测验" : valid === "daily" ? "开始今日学习" : "抽查当前词库";
     }
     // Pre-select matching target in quick JSON importer
     const targetSel = document.getElementById("quick-import-target");
@@ -2029,7 +2631,7 @@
     });
     document.getElementById("weak-filter")?.addEventListener("change", () => renderWeakWordsList());
     document.getElementById("btn-quiz-weak")?.addEventListener("click", () => {
-      const targetBook = vocabView.book || "all";
+      const targetBook = vocabView.book === "daily" ? "all" : (vocabView.book || "all");
       if (IS_SETTINGS_VIEW) HostBridge.startQuizBook(targetBook);
       else startWordQuiz(targetBook === "weak", false, targetBook);
     });
@@ -2262,6 +2864,34 @@
   }
 
   function collectVocabItemsForBook(bookId) {
+    if (bookId === "daily") {
+      ensureDailyActivePool(false);
+      const { map } = buildAllEntriesIndex();
+      const vp = state.vocabProgress || normalizeVocabProgress(null);
+      const out = [];
+      const seen = new Set();
+      // 1. Today's unlocked Daily Active Pool in unlock order
+      for (const k of vp.dailyQueue || []) {
+        const e = map.get(k);
+        if (!e || seen.has(k)) continue;
+        seen.add(k);
+        out.push({ ...e, _isWeakRow: false });
+      }
+      // 2. Also include any due reviews from previous days so the user sees everything active today
+      const now = Date.now();
+      Object.values(vp.items || {}).forEach((p) => {
+        if (!p || seen.has(p.key)) return;
+        if ((p.status === "learning" || p.status === "reviewing") && (Number(p.nextReviewAt) || 0) <= now) {
+          const e = map.get(p.key);
+          if (e) {
+            seen.add(p.key);
+            out.push({ ...e, _isWeakRow: false });
+          }
+        }
+      });
+      return out;
+    }
+
     if (bookId === "weak") {
       const filter = document.getElementById("weak-filter")?.value || "unmastered";
       return (state.weakWords || [])
@@ -2303,7 +2933,7 @@
     card.className = `word-item-card${isWeakRow && item.mastered ? " mastered" : ""}`;
 
     const bookId = item.bookId || "";
-    const showBookTag = vocabView.book === "all" || (isWeakRow && (bookId === "toefl" || bookId === "blender" || bookId === "antigravity"));
+    const showBookTag = vocabView.book === "all" || vocabView.book === "daily" || (isWeakRow && (bookId === "toefl" || bookId === "blender" || bookId === "antigravity"));
     const bookTagText = bookId === "blender"
       ? "Blender 3D"
       : bookId === "antigravity"
@@ -2317,9 +2947,22 @@
       ? "word-book-tag antigravity"
       : "word-book-tag";
 
+    const prog = getWordProgress(item.word);
+    const srsStatus = prog?.status || "unseen";
+    const srsLabel = srsStatus === "mastered"
+      ? "已掌握"
+      : srsStatus === "reviewing"
+      ? `巩固中 · 连对 ${prog.streak || 0}${prog.nextReviewAt ? ` · ${formatRelativeReviewTime(prog.nextReviewAt)}` : ""}`
+      : srsStatus === "learning"
+      ? `在学${prog.nextReviewAt ? ` · ${formatRelativeReviewTime(prog.nextReviewAt)}` : ""}`
+      : "待投喂";
+
     const tagsHtml = [];
     if (showBookTag && bookTagText) {
       tagsHtml.push(`<span class="${bookTagCls}">${escapeHtml(bookTagText)}</span>`);
+    }
+    if (vocabView.book === "daily" || prog) {
+      tagsHtml.push(`<span class="srs-pill ${srsStatus}">${escapeHtml(srsLabel)}</span>`);
     }
     if (item.category) {
       tagsHtml.push(`<span class="word-cat-tag">${escapeHtml(item.category)}</span>`);
@@ -2676,15 +3319,13 @@
   }
 
   function updateSidebarStatus() {
-    const wordsEl = document.getElementById("sb-today-words");
     const timeEl = document.getElementById("sb-today-time");
     const dotEl = document.getElementById("sb-api-dot");
     const apiEl = document.getElementById("sb-api-status");
 
-    const weakCount = (state.weakWords || []).filter((w) => !w.mastered).length;
     const mins = Math.floor((state.stats?.todayStudySeconds || 0) / 60);
     const timeText = mins >= 60 ? `${(mins / 60).toFixed(1)}h` : `${mins}m`;
-    if (wordsEl) wordsEl.textContent = `${weakCount} 词`;
+    updateDailyProgressBadges();
     if (timeEl) timeEl.textContent = timeText;
 
     const hasKey = !!(state.settings?.api?.apiKey || "").trim();
@@ -3028,6 +3669,24 @@
         if (hint) hint.textContent = CORRECTION_HINTS[style] || CORRECTION_HINTS.gentle;
         autoSaveSettings();
       });
+    });
+
+    document.querySelectorAll("[data-daily-goal]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const goal = Number(btn.dataset.dailyGoal) || 10;
+        state.settings.dailyNewWordsGoal = goal;
+        document.querySelectorAll("[data-daily-goal]").forEach((b) => b.classList.toggle("active", b === btn));
+        ensureDailyActivePool(true);
+        renderWeakWordsList();
+        autoSaveSettings();
+      });
+    });
+
+    document.getElementById("set-daily-ratio")?.addEventListener("change", (e) => {
+      state.settings.dailyFocusRatio = e.target.value || "balanced";
+      ensureDailyActivePool(true);
+      renderWeakWordsList();
+      autoSaveSettings();
     });
 
     document.querySelectorAll("[data-activity]").forEach((btn) => {
@@ -3389,6 +4048,13 @@
     });
     const corrHint = document.getElementById("hint-correction-style");
     if (corrHint) corrHint.textContent = CORRECTION_HINTS[corrStyle];
+
+    const dailyGoal = Number(s.dailyNewWordsGoal) || 10;
+    document.querySelectorAll("[data-daily-goal]").forEach((b) => {
+      b.classList.toggle("active", Number(b.dataset.dailyGoal) === dailyGoal);
+    });
+    const ratioSel = document.getElementById("set-daily-ratio");
+    if (ratioSel) ratioSel.value = s.dailyFocusRatio || "balanced";
 
     const effectiveAct = !s.enableIdleQuiz ? "off" : (s.activityLevel === "super" ? "lively" : (s.activityLevel || "normal"));
     document.querySelectorAll("[data-activity]").forEach((b) => {

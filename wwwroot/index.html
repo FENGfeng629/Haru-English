@@ -44,11 +44,12 @@
           </span>
           <span class="dock-label">Act</span>
         </button>
-        <button class="dock-btn" id="dock-quiz-btn" title="单词抽查测验">
+        <button class="dock-btn" id="dock-quiz-btn" title="每日喂词与间隔复习">
           <span class="dock-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
           </span>
           <span class="dock-label">Quiz</span>
+          <span id="dock-quiz-badge" class="dock-progress-badge" title="今日学习进度">0/10</span>
         </button>
         <button class="dock-btn" data-panel="settings" title="应用设置与词库中心">
           <span class="dock-icon" aria-hidden="true">
@@ -177,8 +178,8 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
             </span>
             <div>
-              <div class="card-title">单词抽查测验</div>
-              <div id="quiz-progress-text" class="card-sub">Question 1 / 4 · 混合抽查</div>
+              <div id="quiz-card-title" class="card-title">每日喂词与复习</div>
+              <div id="quiz-progress-text" class="card-sub">今日进度 0 / 10</div>
             </div>
           </div>
           <button class="close-btn" data-close="quiz" title="关闭">
@@ -243,8 +244,8 @@
         <div class="cv-status-card">
           <div class="cv-status-metrics">
             <div class="cv-metric">
-              <span class="cv-metric-label">生词本</span>
-              <strong id="sb-today-words" class="cv-metric-val">0 词</strong>
+              <span class="cv-metric-label">今日进度</span>
+              <strong id="sb-today-words" class="cv-metric-val">0 / 10</strong>
             </div>
             <div class="cv-metric-sep"></div>
             <div class="cv-metric">
@@ -475,27 +476,42 @@
               </div>
             </section>
 
-            <!-- Card 2: 待机抽查规则 -->
+            <!-- Card 2: 每日词袋与间隔复习 -->
             <section class="bento-card">
               <div class="bento-head">
                 <div class="bento-head-left">
                   <span class="bento-badge">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                   </span>
-                  <h3 class="bento-title">待机抽查规则</h3>
+                  <h3 class="bento-title">每日词袋与间隔复习</h3>
                 </div>
               </div>
               <div class="bento-body">
-                <div class="bento-sub-label">待机抽查频率</div>
+                <div class="bento-sub-label">每日新词目标（自动按词频解锁）</div>
+                <div class="seg-pills seg-3" role="group" aria-label="每日新词目标">
+                  <button type="button" class="seg-pill" data-daily-goal="5">5 词 / 天</button>
+                  <button type="button" class="seg-pill active" data-daily-goal="10">10 词 / 天</button>
+                  <button type="button" class="seg-pill" data-daily-goal="20">20 词 / 天</button>
+                </div>
+
+                <div class="bento-sub-label">学习焦点配比</div>
+                <select id="set-daily-ratio" class="s-select">
+                  <option value="balanced">均衡配比（托福为主 + Blender/Antigravity 保底）</option>
+                  <option value="toefl_heavy">托福冲刺（托福 80% + 软件保底 2 词）</option>
+                  <option value="software_heavy">软件实战（Blender + Antigravity 60% + 托福 40%）</option>
+                  <option value="single_book">专注当前抽查词库（100%）</option>
+                </select>
+
+                <div class="bento-sub-label">待机喂词 / 抽查频率</div>
                 <div class="seg-pills seg-4" role="group" aria-label="待机抽查频率">
                   <button type="button" class="seg-pill" data-activity="off">关闭</button>
                   <button type="button" class="seg-pill" data-activity="quiet">30分</button>
                   <button type="button" class="seg-pill active" data-activity="normal">12分</button>
                   <button type="button" class="seg-pill" data-activity="lively">5分</button>
                 </div>
-                <div id="hint-activity-level" class="bento-hint-strip">待机满 12 分钟自动发起一组 4 题单词复习测验。</div>
+                <div id="hint-activity-level" class="bento-hint-strip">先投喂今日新词认词，10分钟后间隔抽考，绝不盲考未学词。</div>
 
-                <div class="bento-sub-label">当前抽查词库</div>
+                <div class="bento-sub-label">当前抽查词库范围</div>
                 <select id="set-quiz-pack" class="s-select">
                   <option value="all">全部已启用词库</option>
                   <option value="weak">仅不熟练生词</option>
@@ -548,10 +564,11 @@
 
           <!-- ==================== PAGE 2.5: 词库中心（托福 TOEFL + Blender 3D + Antigravity + 个人生词本 + 统计） ==================== -->
           <div id="set-tab-words" class="words-hub-page hidden">
-            <!-- Top Row: 5-Way Vocab Book Switcher Capsules + View Mode Switch -->
+            <!-- Top Row: 6-Way Vocab Book Switcher Capsules (Pinned Daily Bag + All + Weak + 3 Books) + View Mode Switch -->
             <div class="words-subnav-bar">
-              <div class="seg-pills seg-5 vocab-book-tabs" role="tablist" aria-label="词库切换">
-                <button type="button" class="seg-pill active" data-vocab-book="all" role="tab">全部</button>
+              <div class="seg-pills seg-6 vocab-book-tabs" role="tablist" aria-label="词库切换">
+                <button type="button" class="seg-pill active" data-vocab-book="daily" role="tab">今日词袋</button>
+                <button type="button" class="seg-pill" data-vocab-book="all" role="tab">全部</button>
                 <button type="button" class="seg-pill" data-vocab-book="weak" role="tab">生词本</button>
                 <button type="button" class="seg-pill" data-vocab-book="toefl" role="tab">托福 TOEFL</button>
                 <button type="button" class="seg-pill" data-vocab-book="blender" role="tab">Blender 3D</button>

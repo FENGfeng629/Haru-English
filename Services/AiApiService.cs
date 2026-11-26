@@ -17,20 +17,29 @@ public class AiApiService
         string userMessage,
         List<ChatTurn> history,
         List<WeakWord> weakWords,
-        string correctionStyle = "gentle")
+        string correctionStyle = "gentle",
+        List<string>? activeStudyWords = null)
     {
         if (string.IsNullOrWhiteSpace(api.ApiKey) && !IsLocalEndpoint(api.BaseUrl))
         {
             return BuildOfflineChatFallback(englishLevel, userMessage);
         }
 
-        var weakHint = weakWords
-            .Where(w => !w.Mastered)
-            .Take(8)
-            .Select(w => w.Word)
+        var practiceWords = (activeStudyWords ?? new List<string>())
+            .Where(w => !string.IsNullOrWhiteSpace(w))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
             .ToList();
-        var weakClause = weakHint.Count > 0
-            ? $"Occasionally weave one of these words the learner is practicing into conversation when natural: {string.Join(", ", weakHint)}."
+        if (practiceWords.Count == 0)
+        {
+            practiceWords = weakWords
+                .Where(w => !w.Mastered && !string.IsNullOrWhiteSpace(w.Word))
+                .Take(3)
+                .Select(w => w.Word)
+                .ToList();
+        }
+        var weakClause = practiceWords.Count > 0
+            ? $"ACTIVE VOCABULARY PRACTICE: The learner is currently studying these words: [{string.Join(", ", practiceWords)}]. Naturally weave 1 or 2 of them into your `replyEn` when it fits the context, and wrap each used target word in **double asterisks** (e.g. **word**) so the learner notices it in real conversation."
             : "";
         var isStrict = string.Equals(correctionStyle, "strict", StringComparison.OrdinalIgnoreCase);
         var correctionRule = isStrict

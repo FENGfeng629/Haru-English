@@ -21,6 +21,7 @@ public class StorageService
     private string SettingsPath => Path.Combine(DataDir, "settings.json");
     private string WeakWordsPath => Path.Combine(DataDir, "weak_words.json");
     private string StatsPath => Path.Combine(DataDir, "study_stats.json");
+    private string VocabProgressPath => Path.Combine(DataDir, "vocab_progress.json");
 
     public StorageService()
     {
@@ -111,6 +112,33 @@ public class StorageService
     public void SaveStats(StudyStats stats)
     {
         File.WriteAllText(StatsPath, JsonSerializer.Serialize(stats, JsonOptions));
+    }
+
+    public VocabProgressStore LoadVocabProgress()
+    {
+        if (!File.Exists(VocabProgressPath))
+        {
+            return new VocabProgressStore { DailyDate = DateTime.Now.ToString("yyyy-MM-dd") };
+        }
+        try
+        {
+            var json = File.ReadAllText(VocabProgressPath);
+            var store = JsonSerializer.Deserialize<VocabProgressStore>(json, JsonOptions) ?? new VocabProgressStore();
+            store.DailyQueue ??= new List<string>();
+            store.Items ??= new Dictionary<string, WordProgress>(StringComparer.OrdinalIgnoreCase);
+            return store;
+        }
+        catch
+        {
+            return new VocabProgressStore { DailyDate = DateTime.Now.ToString("yyyy-MM-dd") };
+        }
+    }
+
+    public void SaveVocabProgress(VocabProgressStore store)
+    {
+        store.DailyQueue ??= new List<string>();
+        store.Items ??= new Dictionary<string, WordProgress>(StringComparer.OrdinalIgnoreCase);
+        File.WriteAllText(VocabProgressPath, JsonSerializer.Serialize(store, JsonOptions));
     }
 
     public List<KnowledgePack> LoadAllKnowledgePacks()
@@ -360,8 +388,9 @@ public class StorageService
         // 2. Clear legacy weak_words.json
         SaveWeakWords(new List<WeakWord>());
 
-        // 3. Reset legacy word/quiz statistics for the new TOEFL + Blender + Antigravity tri-vocab system
+        // 3. Reset legacy word/quiz statistics & SRS progress for the new tri-vocab system
         SaveStats(new StudyStats { TodayDate = DateTime.Now.ToString("yyyy-MM-dd") });
+        SaveVocabProgress(new VocabProgressStore { DailyDate = DateTime.Now.ToString("yyyy-MM-dd") });
 
         // 4. Preserve ALL user settings (API, Voice, Appearance, Hotkeys, Position, CloudSync),
         //    only migrating/resetting stale QuizPackId and bumping VocabVersion = 4

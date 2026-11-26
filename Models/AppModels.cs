@@ -10,8 +10,12 @@ public class AppSettings
     public string ActivityLevel { get; set; } = "normal";
     // A1 | A2 | B1 | B2 | C1 | C2
     public string EnglishLevel { get; set; } = "B1";
-    // all | weak | <knowledgePackId>
+    // all | weak | toefl | blender | antigravity | <knowledgePackId>
     public string QuizPackId { get; set; } = "all";
+    // Daily Active Pool settings: 5 | 10 | 20
+    public int DailyNewWordsGoal { get; set; } = 10;
+    // balanced | toefl_heavy | software_heavy | single_book
+    public string DailyFocusRatio { get; set; } = "balanced";
     public string ModelUrl { get; set; } = "models/haru/haru_greeter_t03.model3.json";
     public bool AlwaysOnTop { get; set; } = true;
     public bool LockPosition { get; set; } = false;
@@ -164,4 +168,29 @@ public class ChatTurn
 {
     public string Role { get; set; } = "user";
     public string Content { get; set; } = "";
+}
+
+public class WordProgress
+{
+    public string Key { get; set; } = ""; // lowercase word
+    public string BookId { get; set; } = "";
+    public string Word { get; set; } = "";
+    // unseen | learning | reviewing | mastered
+    public string Status { get; set; } = "unseen";
+    public int SeenCount { get; set; } = 0;
+    public int Streak { get; set; } = 0;
+    // Unix epoch milliseconds; 0 means not scheduled / mastered
+    public long NextReviewAt { get; set; } = 0;
+    public int WrongCount { get; set; } = 0;
+    public int CorrectCount { get; set; } = 0;
+    public string UnlockedDate { get; set; } = "";
+    public string LastReviewedAt { get; set; } = "";
+}
+
+public class VocabProgressStore
+{
+    public string DailyDate { get; set; } = "";
+    public List<string> DailyQueue { get; set; } = new(); // ordered lowercase word keys for today
+    public string DailyGoalCelebratedDate { get; set; } = "";
+    public Dictionary<string, WordProgress> Items { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

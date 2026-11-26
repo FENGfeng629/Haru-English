@@ -6,7 +6,7 @@ namespace HaruEnglishPet.Services;
 
 public class StorageService
 {
-    public const int CurrentVocabVersion = 4;
+    public const int CurrentVocabVersion = 5;
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -247,6 +247,7 @@ public class StorageService
                         : target.Id == "antigravity" ? "Antigravity · 自定义"
                         : "导入词条")
                     : raw.Category.Trim(),
+                UiLocation = raw.UiLocation?.Trim() ?? "",
                 Shortcut = raw.Shortcut?.Trim() ?? "",
                 Example = raw.Example?.Trim() ?? "",
                 ExampleZh = raw.ExampleZh?.Trim() ?? "",
@@ -328,6 +329,7 @@ public class StorageService
                 if (string.IsNullOrWhiteSpace(existing.Phonetic)) existing.Phonetic = rw.Phonetic;
                 if (string.IsNullOrWhiteSpace(existing.Example)) existing.Example = rw.Example;
                 if (string.IsNullOrWhiteSpace(existing.Category)) existing.Category = rw.Category;
+                if (string.IsNullOrWhiteSpace(existing.UiLocation)) existing.UiLocation = rw.UiLocation;
                 if (string.IsNullOrWhiteSpace(existing.Shortcut)) existing.Shortcut = rw.Shortcut;
             }
             else

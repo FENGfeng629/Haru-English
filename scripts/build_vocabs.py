@@ -156,6 +156,7 @@ def build_toefl() -> dict[str, Any]:
                 "id": f"toefl_{idx:04d}",
                 "bookId": "toefl",
                 "word": word,
+                "uiLocation": "",
                 "phonetic": phonetic,
                 "pos": pos,
                 "meaning": meaning,
@@ -180,6 +181,60 @@ def build_toefl() -> dict[str, Any]:
     }
 
 
+def _default_ui_location(book_id: str, category: str, shortcut: str) -> str:
+    if book_id == "blender":
+        if "Modeling" in category:
+            return "Edit Mode · 左侧工具栏 / 网格菜单"
+        if "Viewport" in category:
+            return "3D Viewport · 视图与变换"
+        if "Modifiers" in category:
+            return "Properties · 修改器面板 (扳手图标)"
+        if "Shader Nodes" in category:
+            return "Shader Editor · 添加节点 (Shift + A)"
+        if "Geometry Nodes" in category:
+            return "Geometry Nodes · 添加节点 (Shift + A)"
+        if "UV" in category:
+            return "UV Editor · UV 菜单 / 工具栏"
+        if "Sculpt" in category:
+            return "Sculpt Mode · 左侧笔刷工具栏"
+        if "Render" in category:
+            return "Properties · 渲染与灯光属性"
+        if "Rigging" in category:
+            return "Pose Mode / 动画编辑器"
+        if "Physics" in category:
+            return "Properties · 物理属性面板"
+        return "Blender · 3D 视口"
+    if book_id == "antigravity":
+        if shortcut.startswith("/"):
+            return "Antigravity · 对话输入框 (斜杠命令)"
+        if "CLI" in category or shortcut.startswith("agy"):
+            return "Antigravity CLI · 终端命令行"
+        if "IDE" in category:
+            return "Antigravity IDE · 编辑器 / 辅助面板"
+        if "Customizations" in category:
+            return "Antigravity · 插件与定制目录"
+        if "SDK" in category:
+            return "Antigravity · Python SDK"
+        if "Security" in category:
+            return "Antigravity · 设置 / 沙箱与权限"
+        if "Artifact" in category:
+            return "Antigravity · 产物审查面板"
+        if "Agent" in category:
+            return "Antigravity · 智能体协作面板"
+        if "Products" in category:
+            return "Antigravity · 平台与产品入口"
+        return "Antigravity · 主工作区"
+    return ""
+
+
+def _format_shortcut_spaces(sc: str) -> str:
+    s = clean_str(sc)
+    if not s or s.startswith("/") or s.startswith("agy") or "." in s:
+        return s
+    # Normalize "Ctrl+B" -> "Ctrl + B" for clean keyboard-cap readability
+    return re.sub(r"\s*\+\s*", " + ", s)
+
+
 def _pack_rows(
     book_id: str,
     prefix: str,
@@ -196,16 +251,19 @@ def _pack_rows(
             continue
         seen.add(k)
         idx = len(out) + 1
+        sc_fmt = _format_shortcut_spaces(shortcut)
+        cat_clean = clean_str(category)
         out.append(
             {
                 "id": f"{prefix}_{idx:04d}",
                 "bookId": book_id,
                 "word": w,
+                "uiLocation": _default_ui_location(book_id, cat_clean, sc_fmt),
+                "shortcut": sc_fmt,
                 "phonetic": format_phonetic(phonetic),
                 "pos": clean_str(pos),
                 "meaning": clean_str(meaning),
-                "category": clean_str(category),
-                "shortcut": clean_str(shortcut),
+                "category": cat_clean,
                 "example": clean_str(example),
                 "exampleZh": clean_str(example_zh),
             }

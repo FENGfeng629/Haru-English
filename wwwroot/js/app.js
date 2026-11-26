@@ -374,11 +374,12 @@
       englishLevel: "B1",
       quizPackId: "all",
       dailyNewWordsGoal: 10,
-      dailyFocusRatio: "balanced",
+      dailyFocusRatio: "single_book",
       modelUrl: "models/haru/haru_greeter_t03.model3.json",
       alwaysOnTop: true,
       lockPosition: false,
       fullscreenDnd: true,
+      launchAtStartup: false,
       petX: -1,
       petY: -1,
       showChineseSubtitles: true,
@@ -1588,6 +1589,7 @@
           pos: e.pos || e.partOfSpeech || "",
           meaning: e.meaning.trim(),
           category: e.category || "",
+          uiLocation: e.uiLocation || "",
           shortcut: e.shortcut || "",
           example: e.example || "",
           exampleZh: e.exampleZh || "",
@@ -2053,6 +2055,7 @@
             <button id="teach-say-btn" class="icon-mini-btn" title="发音">${SPEAKER_SVG}</button>
           </div>
           ${cur.phonetic ? `<div class="quiz-phonetic">${escapeHtml(cur.phonetic)}</div>` : ""}
+          ${cur.uiLocation ? `<div class="ui-loc-badge">📍 ${escapeHtml(cur.uiLocation)}</div>` : ""}
           ${metaBadges.length ? `<div class="quiz-meta-badges">${metaBadges.join("")}</div>` : ""}
           <div class="teach-meaning">${escapeHtml(cur.meaning)}</div>
           ${cur.example ? `
@@ -2176,20 +2179,24 @@
     q.answered = false;
     const bookName = getBookDisplayName(cur.bookId || q.bookId);
     const streak = cur.streak || 0;
+    const isSoftwareBook = cur.bookId === "blender" || cur.bookId === "antigravity";
 
-    // 3-Tier Progressive Mode based on streak:
-    //   streak === 0 -> Stage 1: EN -> ZH (看英选义)
-    //   streak === 1 -> Stage 2: Cloze / ZH -> EN (语境/释义选英)
-    //   streak >= 2  -> Stage 3: Shortcut/Command match (for Blender/Antigravity) OR Active Cloze Recall (for TOEFL)
-    const isShortcutStage = streak >= 2 && !!cur.shortcut;
+    // Progressive Quiz Modes:
+    // Software books (Blender / Antigravity):
+    //   streak === 0 -> 认按钮（英→中）: uiLocation + English button name -> pick Chinese meaning
+    //   streak === 1 -> 找按钮（中→英）: Chinese meaning + uiLocation -> pick English button name
+    //   streak >= 2  -> 记键位（操作→键位）: English button name + Chinese meaning -> pick shortcut (same-software distractors)
+    // Academic TOEFL:
+    //   streak === 0 -> 第 1 阶 · 看英选义
+    //   streak === 1 -> 第 2 阶 · 语境选词 (Cloze)
+    //   streak >= 2  -> 第 3 阶 · 终极巩固
+    const isShortcutStage = isSoftwareBook && streak >= 2 && !!cur.shortcut;
     const stageType = streak === 0 ? "en2zh" : (isShortcutStage ? "shortcut" : "zh2en");
-    const stageLabel = streak === 0
-      ? "第 1 阶 · 看英选义"
-      : streak === 1
-      ? "第 2 阶 · 语境选词"
-      : (isShortcutStage ? "第 3 阶 · 快捷键实战" : "第 3 阶 · 终极巩固");
+    const stageLabel = isSoftwareBook
+      ? (streak === 0 ? "认按钮 · 英→中" : streak === 1 ? "找按钮 · 中→英" : (isShortcutStage ? "记键位 · 操作→键位" : "找按钮 · 终极巩固"))
+      : (streak === 0 ? "第 1 阶 · 看英选义" : streak === 1 ? "第 2 阶 · 语境选词" : "第 3 阶 · 终极巩固");
 
-    if (titleEl) titleEl.textContent = "间隔复习抽查";
+    if (titleEl) titleEl.textContent = isSoftwareBook ? "按钮与键位互考" : "间隔复习抽查";
     if (prog) prog.textContent = `Question ${q.index + 1} / ${q.questions.length} · ${bookName}`;
 
     const sameBook = q.allPool.filter(
@@ -2212,9 +2219,14 @@
       options = [correctAnswer, ...dist].sort(() => Math.random() - 0.5);
     } else if (stageType === "shortcut") {
       correctAnswer = cur.shortcut;
-      const shortcutPool = q.allPool.filter(
+      // Distractors strictly from OTHER real shortcuts of the SAME software first
+      const sameSoftwareShortcuts = q.allPool.filter(
+        (x) => x.bookId === cur.bookId && x.shortcut && x.shortcut.toLowerCase() !== cur.shortcut.toLowerCase()
+      );
+      const fallbackShortcuts = q.allPool.filter(
         (x) => x.shortcut && x.shortcut.toLowerCase() !== cur.shortcut.toLowerCase()
       );
+      const shortcutPool = sameSoftwareShortcuts.length >= 3 ? sameSoftwareShortcuts : fallbackShortcuts;
       const uniqueDist = [];
       const seenSc = new Set([cur.shortcut.toLowerCase()]);
       for (const x of shortcutPool.sort(() => Math.random() - 0.5)) {
@@ -2240,6 +2252,7 @@
     if (cur.pos) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.pos)}</span>`);
     if (cur.category) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.category)}</span>`);
 
+    const uiLocHtml = cur.uiLocation ? `<div class="ui-loc-badge">📍 ${escapeHtml(cur.uiLocation)}</div>` : "";
     let promptHtml = "";
     if (stageType === "en2zh") {
       promptHtml = `
@@ -2249,6 +2262,7 @@
           <button id="quiz-say-btn" class="icon-mini-btn" title="发音">${SPEAKER_SVG}</button>
         </div>
         ${cur.phonetic ? `<div class="quiz-phonetic">${escapeHtml(cur.phonetic)}</div>` : ""}
+        ${uiLocHtml}
         <div class="quiz-meta-badges">${metaBadges.join("")}</div>
         ${cur.example ? `<div class="quiz-hint">"${escapeHtml(cur.example)}"</div>` : ""}
       `;
@@ -2258,19 +2272,21 @@
           <span>${escapeHtml(cur.word)}</span>
           <button id="quiz-say-btn" class="icon-mini-btn" title="发音">${SPEAKER_SVG}</button>
         </div>
+        ${uiLocHtml}
         <div class="quiz-meta-badges">${metaBadges.join("")}</div>
         <div class="teach-meaning" style="font-size:13px;">${escapeHtml(cur.meaning)}</div>
-        <div class="quiz-hint">请选择该操作对应的快捷键 / 命令：</div>
+        <div class="quiz-hint">请选择该按钮/操作对应的快捷键或命令：</div>
       `;
     } else {
-      const cloze = cur.example ? createClozeSentence(cur.example, cur.word) : "";
+      const cloze = !isSoftwareBook && cur.example ? createClozeSentence(cur.example, cur.word) : "";
       promptHtml = `
         <div class="quiz-meta-badges">${metaBadges.join("")}</div>
+        ${uiLocHtml}
         <div class="teach-meaning" style="display:inline-flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap;">
           <span>${escapeHtml(cur.meaning)}</span>
           <button id="quiz-say-btn" class="icon-mini-btn" title="听音提示">${SPEAKER_SVG}</button>
         </div>
-        ${cloze ? `<div class="quiz-hint">"${cloze}"</div>` : ""}
+        ${cloze ? `<div class="quiz-hint">"${cloze}"</div>` : (isSoftwareBook ? `<div class="quiz-hint">请选择对应的英文界面按钮名：</div>` : "")}
       `;
     }
 
@@ -2601,11 +2617,18 @@
     if (quizBtn) {
       quizBtn.textContent = isWeak ? "专攻生词测验" : valid === "daily" ? "开始今日学习" : "抽查当前词库";
     }
-    // Pre-select matching target in quick JSON importer
+    // Pre-select matching target in quick JSON importer AND default quiz pack to current selected book
     const targetSel = document.getElementById("quick-import-target");
     if (targetSel && (valid === "toefl" || valid === "blender" || valid === "antigravity")) {
       targetSel.value = valid;
       document.getElementById("quick-import-name")?.classList.add("hidden");
+    }
+    if (["toefl", "blender", "antigravity", "weak"].includes(valid) && state.settings && state.settings.quizPackId !== valid) {
+      state.settings.quizPackId = valid;
+      syncQuizBookButtons(valid);
+      const quizPackSel = document.getElementById("set-quiz-pack");
+      if (quizPackSel) quizPackSel.value = valid;
+      HostBridge.rpc("saveSettings", state.settings);
     }
     // Ensure we are on the browse view when clicking a book pill
     switchWordsTab("weak");
@@ -2979,6 +3002,7 @@
           ${item.pos ? `<span class="word-pos-tag">${escapeHtml(item.pos)}</span>` : ""}
           ${item.phonetic ? `<span class="phonetic">${escapeHtml(item.phonetic)}</span>` : ""}
         </div>
+        ${item.uiLocation ? `<div class="ui-loc-badge">📍 ${escapeHtml(item.uiLocation)}</div>` : ""}
         <div class="word-meta">${escapeHtml(item.meaning || "")}</div>
         ${tagsHtml.length ? `<div class="word-tags-row">${tagsHtml.join("")}</div>` : ""}
         ${item.example ? `<div class="word-example">"${escapeHtml(item.example)}"</div>` : ""}
@@ -3539,6 +3563,10 @@
       state.settings.fullscreenDnd = !!e.target.checked;
       autoSaveSettings();
     });
+    document.getElementById("set-autostart")?.addEventListener("change", (e) => {
+      state.settings.launchAtStartup = !!e.target.checked;
+      autoSaveSettings();
+    });
 
     // Model Preset Cards + Custom Model Import Sub-dialog
     document.querySelectorAll(".model-preset-card[data-model-preset]").forEach((btn) => {
@@ -4031,6 +4059,8 @@
     if (lockCb) lockCb.checked = !!s.lockPosition;
     const dndCb = document.getElementById("set-fullscreen-dnd");
     if (dndCb) dndCb.checked = s.fullscreenDnd !== false;
+    const autostartCb = document.getElementById("set-autostart");
+    if (autostartCb) autostartCb.checked = !!s.launchAtStartup;
 
     syncModelPresetCards(s.modelUrl);
     const modelInput = document.getElementById("set-model-url");

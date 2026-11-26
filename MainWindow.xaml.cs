@@ -1307,6 +1307,48 @@ public partial class MainWindow : Window
 
     public void CancelTtsFromSettings() => CancelPendingTts();
 
+    private const string StartupRegKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+    private const string StartupAppName = "HaruEnglishPet";
+
+    private static bool IsStartupEnabled()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(StartupRegKeyPath, false);
+            var val = key?.GetValue(StartupAppName) as string;
+            return !string.IsNullOrWhiteSpace(val);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void ApplyStartupSetting(bool enable)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(StartupRegKeyPath, true);
+            if (key == null) return;
+            if (enable)
+            {
+                var exePath = Environment.ProcessPath;
+                if (!string.IsNullOrWhiteSpace(exePath))
+                {
+                    key.SetValue(StartupAppName, $"\"{exePath}\"");
+                }
+            }
+            else
+            {
+                key.DeleteValue(StartupAppName, false);
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"ApplyStartupSetting({enable}) failed: {ex.Message}");
+        }
+    }
+
     public void LogFromSettings(string message) => DebugLog($"[SettingsJS] {message}");
 
     public void PrewarmTtsFromSettings(JsonArray? itemsArr)
@@ -1342,6 +1384,7 @@ public partial class MainWindow : Window
             case "getInitialState":
             {
                 var settings = _storage.LoadSettings();
+                settings.LaunchAtStartup = IsStartupEnabled();
                 var weakWords = _storage.LoadWeakWords();
                 var stats = _storage.LoadStats();
                 var vocabProgress = _storage.LoadVocabProgress();
@@ -1396,6 +1439,7 @@ public partial class MainWindow : Window
                     }
                 }
                 _storage.SaveSettings(settings);
+                ApplyStartupSetting(settings.LaunchAtStartup);
                 Dispatcher.Invoke(() =>
                 {
                     Topmost = settings.AlwaysOnTop;

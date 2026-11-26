@@ -14,12 +14,13 @@ public class AppSettings
     public string QuizPackId { get; set; } = "all";
     // Daily Active Pool settings: 5 | 10 | 20
     public int DailyNewWordsGoal { get; set; } = 10;
-    // balanced | toefl_heavy | software_heavy | single_book
-    public string DailyFocusRatio { get; set; } = "balanced";
+    // single_book | balanced | toefl_heavy | software_heavy
+    public string DailyFocusRatio { get; set; } = "single_book";
     public string ModelUrl { get; set; } = "models/haru/haru_greeter_t03.model3.json";
     public bool AlwaysOnTop { get; set; } = true;
     public bool LockPosition { get; set; } = false;
     public bool FullscreenDnd { get; set; } = true;
+    public bool LaunchAtStartup { get; set; } = false;
     public double PetX { get; set; } = -1; // -1 means auto bottom-right
     public double PetY { get; set; } = -1;
     // Legacy bool retained for backward compatibility; ChineseSubtitleMode takes precedence when set
@@ -96,6 +97,7 @@ public class WeakWord
     public string Pos { get; set; } = "";
     public string Meaning { get; set; } = "";
     public string Category { get; set; } = "";
+    public string UiLocation { get; set; } = "";
     public string Shortcut { get; set; } = "";
     public string Example { get; set; } = "";
     public string ExampleZh { get; set; } = "";
@@ -133,6 +135,7 @@ public class KnowledgeEntry
     public string PartOfSpeech { get; set; } = "";
     public string Meaning { get; set; } = "";
     public string Category { get; set; } = "";
+    public string UiLocation { get; set; } = "";
     public string Shortcut { get; set; } = "";
     public string Example { get; set; } = "";
     public string ExampleZh { get; set; } = "";

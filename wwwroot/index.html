@@ -376,6 +376,13 @@
                   </div>
                   <span class="s-switch"><input id="set-fullscreen-dnd" type="checkbox" /><span class="s-switch-track"></span></span>
                 </label>
+                <label class="bento-switch-row" for="set-autostart">
+                  <div>
+                    <div class="bento-row-title">开机自动启动</div>
+                    <div class="bento-row-desc">登录 Windows 后自动在桌面启动 Haru 桌宠</div>
+                  </div>
+                  <span class="s-switch"><input id="set-autostart" type="checkbox" /><span class="s-switch-track"></span></span>
+                </label>
               </div>
             </section>
 
@@ -496,10 +503,10 @@
 
                 <div class="bento-sub-label">学习焦点配比</div>
                 <select id="set-daily-ratio" class="s-select">
+                  <option value="single_book">专注当前抽查词库（默认）</option>
                   <option value="balanced">均衡配比（托福为主 + Blender/Antigravity 保底）</option>
                   <option value="toefl_heavy">托福冲刺（托福 80% + 软件保底 2 词）</option>
                   <option value="software_heavy">软件实战（Blender + Antigravity 60% + 托福 40%）</option>
-                  <option value="single_book">专注当前抽查词库（100%）</option>
                 </select>
 
                 <div class="bento-sub-label">待机喂词 / 抽查频率</div>

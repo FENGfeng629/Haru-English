@@ -7,6 +7,65 @@ window.VoiceEngine = (() => {
   let fakeLipTimer = null;
   let speakSeq = 0;
 
+  // Client-side decoded AudioBuffer LRU cache for instant (<5ms) zero-IPC replay
+  const MAX_DECODED_CACHE = 80;
+  const decodedAudioCache = new Map();
+
+  function buildVoiceCacheKey(cleanText, cfg) {
+    const provider = (cfg.ttsProvider || "edge").toLowerCase();
+    const voiceName = provider === "openai"
+      ? (cfg.openAiVoice || "nova")
+      : (cfg.edgeVoice || "en-US-AnaNeural");
+    const rate = Number(cfg.speechRate || 1.0).toFixed(2);
+    const pitch = Number(cfg.speechPitch || 1.0).toFixed(2);
+    return `${provider}|${voiceName}|${rate}|${pitch}|${cleanText}`;
+  }
+
+  function getCachedBuffer(key) {
+    if (!decodedAudioCache.has(key)) return null;
+    const val = decodedAudioCache.get(key);
+    // Refresh LRU order
+    decodedAudioCache.delete(key);
+    decodedAudioCache.set(key, val);
+    return val;
+  }
+
+  function putCachedBuffer(key, entry) {
+    if (decodedAudioCache.has(key)) decodedAudioCache.delete(key);
+    decodedAudioCache.set(key, entry);
+    if (decodedAudioCache.size > MAX_DECODED_CACHE) {
+      const oldestKey = decodedAudioCache.keys().next().value;
+      if (oldestKey !== undefined) decodedAudioCache.delete(oldestKey);
+    }
+  }
+
+  function base64ToArrayBuffer(base64) {
+    const bin = atob(base64);
+    const len = bin.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+
+  function prewarm(texts, voiceConfig) {
+    if (!window.HostBridge || typeof HostBridge.prewarmTts !== "function") return;
+    const cfg = voiceConfig || {
+      ttsProvider: "edge",
+      edgeVoice: "en-US-AnaNeural",
+      openAiVoice: "nova",
+      webSpeechVoice: "",
+      speechRate: 1.0,
+      speechPitch: 1.0,
+    };
+    if ((cfg.ttsProvider || "edge").toLowerCase() === "webspeech") return;
+    const list = (Array.isArray(texts) ? texts : [texts])
+      .map((t) => (t || "").replace(/[*_`#]/g, "").trim())
+      .filter((t) => t && !decodedAudioCache.has(buildVoiceCacheKey(t, cfg)));
+    if (!list.length) return;
+    const unique = [...new Set(list)].slice(0, 12);
+    HostBridge.prewarmTts(unique.map((text) => ({ text, voice: cfg })));
+  }
+
   // STT state
   let isListening = false;
   let activeRecognition = null;
@@ -69,10 +128,6 @@ window.VoiceEngine = (() => {
     const clean = (text || "").replace(/[*_`#]/g, "").trim();
     if (!clean) return { ok: false, provider: "none" };
 
-    // Immediately stop any active speech and cancel any in-flight synthesis request
-    stopSpeaking(true);
-    const mySeq = speakSeq;
-
     const cfg = voiceConfig || {
       ttsProvider: "edge",
       edgeVoice: "en-US-AnaNeural",
@@ -81,6 +136,20 @@ window.VoiceEngine = (() => {
       speechRate: 1.0,
       speechPitch: 1.0,
     };
+
+    const cacheKey = buildVoiceCacheKey(clean, cfg);
+    const cachedEntry = cfg.ttsProvider !== "webspeech" ? getCachedBuffer(cacheKey) : null;
+
+    // Immediately stop any active speech (skip host cancel IPC if playing directly from local RAM cache)
+    stopSpeaking(!cachedEntry);
+    const mySeq = speakSeq;
+
+    if (cachedEntry && cachedEntry.buffer) {
+      const info = { ok: true, provider: cachedEntry.provider || cfg.ttsProvider, voice: cachedEntry.voice || cfg.edgeVoice, cached: true };
+      if (typeof onStart === "function") onStart(info);
+      await playAudioBufferWithLipSync(cachedEntry.buffer, mySeq);
+      return info;
+    }
 
     let fallbackError = "";
     if (cfg.ttsProvider !== "webspeech") {
@@ -92,9 +161,20 @@ window.VoiceEngine = (() => {
         }
         if (res && res.ok && res.audioBase64) {
           const info = { ok: true, provider: res.provider || cfg.ttsProvider, voice: res.voice || cfg.edgeVoice };
-          if (typeof onStart === "function") onStart(info);
-          await playBase64AudioWithLipSync(res.audioBase64, res.mimeType || "audio/mpeg", mySeq);
-          return info;
+          try {
+            const ctx = ensureAudioContext();
+            const audioBuffer = await ctx.decodeAudioData(base64ToArrayBuffer(res.audioBase64));
+            if (mySeq !== speakSeq) return { ok: false, cancelled: true };
+            putCachedBuffer(cacheKey, { buffer: audioBuffer, provider: info.provider, voice: info.voice });
+            if (typeof onStart === "function") onStart(info);
+            await playAudioBufferWithLipSync(audioBuffer, mySeq);
+            return info;
+          } catch {
+            if (mySeq !== speakSeq) return { ok: false, cancelled: true };
+            if (typeof onStart === "function") onStart(info);
+            await playBase64AudioWithLipSync(res.audioBase64, res.mimeType || "audio/mpeg", mySeq);
+            return info;
+          }
         }
         fallbackError = (res && res.error) ? res.error : "";
       } catch (e) {
@@ -118,6 +198,79 @@ window.VoiceEngine = (() => {
     };
     if (typeof onStart === "function") onStart(fallbackInfo);
     return fallbackInfo;
+  }
+
+  function playAudioBufferWithLipSync(audioBuffer, seq) {
+    return new Promise((resolve) => {
+      if (seq !== speakSeq || !audioBuffer) {
+        resolve();
+        return;
+      }
+
+      clearAudioPlaybackOnly();
+
+      let finished = false;
+      let source = null;
+      let analyser = null;
+
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (currentAudioCancel === finish) currentAudioCancel = null;
+        if (source) {
+          try {
+            source.onended = null;
+            source.stop();
+          } catch { }
+          try { source.disconnect(); } catch { }
+          source = null;
+        }
+        try { analyser?.disconnect(); } catch { }
+        analyser = null;
+        if (seq === speakSeq) {
+          if (lipSyncRaf) {
+            cancelAnimationFrame(lipSyncRaf);
+            lipSyncRaf = null;
+          }
+          HaruPet.setLipSync(0);
+        }
+        resolve();
+      };
+
+      try {
+        const ctx = ensureAudioContext();
+        source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+        currentAudioCancel = finish;
+
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const updateLip = () => {
+          if (finished || seq !== speakSeq || !analyser) {
+            if (seq === speakSeq) HaruPet.setLipSync(0);
+            return;
+          }
+          analyser.getByteTimeDomainData(data);
+          let sum = 0;
+          for (let i = 0; i < data.length; i++) {
+            const v = (data[i] - 128) / 128;
+            sum += v * v;
+          }
+          const rms = Math.sqrt(sum / data.length);
+          HaruPet.setLipSync(Math.min(1, rms * 4.5));
+          lipSyncRaf = requestAnimationFrame(updateLip);
+        };
+
+        source.onended = () => finish();
+        source.start(0);
+        lipSyncRaf = requestAnimationFrame(updateLip);
+      } catch {
+        finish();
+      }
+    });
   }
 
   function playBase64AudioWithLipSync(base64, mimeType, seq) {
@@ -411,6 +564,7 @@ window.VoiceEngine = (() => {
   return {
     speak,
     stopSpeaking,
+    prewarm,
     getWebSpeechVoices,
     startListening,
     stopListening,

@@ -122,7 +122,7 @@ public class StudyStats
 public class KnowledgeEntry
 {
     public string Id { get; set; } = "";
-    public string BookId { get; set; } = ""; // toefl_core | blender_3d | custom
+    public string BookId { get; set; } = ""; // toefl_core | blender_3d | antigravity | custom
     public string Word { get; set; } = "";
     public string Phonetic { get; set; } = "";
     public string Pos { get; set; } = "";
@@ -143,7 +143,7 @@ public class KnowledgePack
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
     public string Level { get; set; } = "TOEFL";
-    public string Category { get; set; } = "vocabulary"; // toefl | blender | vocabulary | custom
+    public string Category { get; set; } = "vocabulary"; // toefl | blender | antigravity | vocabulary | custom
     public bool BuiltIn { get; set; } = false;
     public bool Enabled { get; set; } = true;
     public string UpdatedAt { get; set; } = DateTime.UtcNow.ToString("o");

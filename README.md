@@ -5,13 +5,13 @@
 <h1 align="center">Haru English</h1>
 
 <p align="center">
-  <b>一款陪你聊天学英语、专攻托福与 Blender 3D 高频词的 Windows 透明悬浮 Live2D 桌宠</b><br/>
+  <b>一款陪你聊天学英语、专攻托福 / Blender 3D / Antigravity 高频词的 Windows 透明悬浮 Live2D 桌宠</b><br/>
   Windows transparent Live2D AI English learning desktop companion powered by WPF, WebView2, PixiJS & Cubism 4.
 </p>
 
 ---
 
-**Haru English** 是一款纯桌面悬浮的 Windows Live2D 英语学习桌宠。无边框透明悬浮在桌面上，由 Live2D 角色 **Haru** 陪你进行日常英语文字/语音对话、即时翻译与词汇抽查；词库中心目前精选聚焦 **托福 TOEFL 核心高频词** 与 **Blender 3D 英文界面高频术语（含快捷键）**，并配有现代化的侧边栏 Bento 独立设置中心，让你在日常使用电脑的间隙轻松练英语。
+**Haru English** 是一款纯桌面悬浮的 Windows Live2D 英语学习桌宠。无边框透明悬浮在桌面上，由 Live2D 角色 **Haru** 陪你进行日常英语文字/语音对话、即时翻译与词汇抽查；词库中心精选聚焦 **托福 TOEFL 核心高频词**、**Blender 3D 英文界面高频术语（含快捷键）** 与 **Antigravity AI 编程高频术语（含斜杠命令与快捷键）**，并配有现代化的侧边栏 Bento 独立设置中心，让你在日常使用电脑的间隙轻松练英语。
 
 ## ✨ 核心功能 / Features
 
@@ -37,13 +37,14 @@
 - 内置 16 个英文表情与动作词条，支持按「全部 / 表情 / 动作」筛选。
 - 点击任意英文词条，Haru 会立刻做出对应 Live2D 表情或动作并大声朗读单词与例句，支持一键收入个人生词本。
 
-### 4. 托福 & Blender 3D 词库中心与抽查测验 (Vocabulary Hub & Quiz)
-- **双核心内置词库 + 个人生词本**：
+### 4. 托福 & Blender 3D & Antigravity 词库中心与抽查测验 (Vocabulary Hub & Quiz)
+- **三大核心内置词库 + 个人生词本**：
   - **托福 TOEFL**：精选托福高频学术词汇，含音标、词性、中文释义、学科分类与双语例句。
   - **Blender 3D**：精选 Blender 3D 英文界面高频专业术语（如 `Extrude`、`Bevel`、`Loop Cut`、`Normals`、`Subdivision Surface` 等），附带对应**快捷键**与建模场景例句。
+  - **Antigravity**：精选 Antigravity AI 编程与智能体高频英文术语（如 `Agent`、`Implementation Plan`、`Artifact`、`Subagent`、`Swarm`、`MCP Server`、`Inline Edit` 等），附带对应**斜杠命令与快捷键**（如 `/plan`、`/goal`、`/compact`、`Ctrl + I`）。
   - **个人生词本**：支持手动添加词条、标记掌握状态、筛选待巩固词汇，抽查答错的词会自动收录。
-- **词表 / 词库包 / 统计三视图**：支持按单词、中文释义、分类或快捷键搜索，支持分页加载与学习数据统计；也支持通过 `.json` / `.txt` / `.csv` 批量追加合并到托福/Blender 词库或新建自定义词库包。
-- **手动 & 待机自动单词抽查（Quiz）**：每组 4 题，可在测验卡片顶部一键切换「混合 / 托福 / Blender / 生词」；待机抽查频率支持「关闭 / 30 分钟 / 12 分钟 / 5 分钟」。
+- **词表 / 词库包 / 统计三视图 & 大词量分页**：顶部支持「全部 / 生词本 / 托福 TOEFL / Blender 3D / Antigravity」一键切换，单词卡片展示分类标签与等宽快捷键徽章；列表采用每页 30 条增量分页加载以流畅承载数千词规模，也支持 `.json` / `.txt` / `.csv` 批量导入。
+- **手动 & 待机自动单词抽查（Quiz）**：每组 4 题，支持自动预热音频实现零延迟点读，测验卡片顶部可一键切换「混合 / 托福 / Blender / Antigravity / 生词」；待机抽查频率支持「关闭 / 30 分钟 / 12 分钟 / 5 分钟」。
 
 ### 5. 现代化独立设置中心 & 数据同步 (Settings & Sync)
 - **6 大侧边栏分区**（总览与外观、英语学习、词库中心、AI 模型接口、语音与听力、数据与设置），所有修改实时自动保存，左下角常驻状态卡片展示生词本数量、今日专注时长与当前模式。

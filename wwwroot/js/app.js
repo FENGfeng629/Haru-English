@@ -1532,10 +1532,11 @@
     });
   }
 
-  // ==================== PROACTIVE IDLE WORD QUIZ (TOEFL + BLENDER 3D + WEAK WORDS) ====================
+  // ==================== PROACTIVE IDLE WORD QUIZ (TOEFL + BLENDER 3D + ANTIGRAVITY + WEAK WORDS) ====================
   function getBookDisplayName(bookId) {
     if (bookId === "toefl_core") return "托福 TOEFL";
     if (bookId === "blender_3d") return "Blender 3D";
+    if (bookId === "antigravity") return "Antigravity";
     if (bookId === "weak") return "个人生词本";
     if (bookId === "all") return "混合抽查";
     const found = (state.knowledgePacks || []).find((p) => p.id === bookId || p.bookId === bookId);
@@ -1644,6 +1645,10 @@
       .sort((a, b) => b.score - a.score);
 
     const questions = weighted.slice(0, 4).map((w) => w.item);
+    // Prewarm TTS for all 4 quiz words immediately so speaker clicks & next questions play instantaneously
+    if (typeof VoiceEngine.prewarm === "function") {
+      VoiceEngine.prewarm(questions.map((x) => x.word), state.settings.voice);
+    }
     state.quiz = {
       bookId: activeBook,
       questions,
@@ -1661,12 +1666,12 @@
     if (isProactiveIdle) {
       const bookLabel = getBookDisplayName(activeBook);
       const firstQ = questions[0];
-      const blenderTip = firstQ?.bookId === "blender_3d" && firstQ?.shortcut
-        ? `（快捷键提示：${firstQ.shortcut}）`
+      const shortcutTip = firstQ?.shortcut
+        ? `（快捷键/命令：${firstQ.shortcut}）`
         : "";
       showBubble(
         `You've been quiet for a while! Let's do a quick ${bookLabel} quiz!`,
-        `你待机有一会儿啦～来做一组「${bookLabel}」单词抽查吧！${blenderTip}`,
+        `你待机有一会儿啦～来做一组「${bookLabel}」单词抽查吧！${shortcutTip}`,
         { badge: "Idle Quiz", speak: false }
       );
     }
@@ -1707,11 +1712,14 @@
     const metaBadges = [];
     if (cur.pos) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.pos)}</span>`);
     if (cur.category) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.category)}</span>`);
-    if (cur.shortcut) metaBadges.push(`<span class="quiz-kbd-badge">快捷键 ${escapeHtml(cur.shortcut)}</span>`);
 
     body.innerHTML = `
       <div class="quiz-word-box">
-        <div class="quiz-word" style="display:inline-flex;align-items:center;gap:6px;">${escapeHtml(cur.word)} <button id="quiz-say-btn" class="icon-mini-btn" title="发音">${SPEAKER_SVG}</button></div>
+        <div class="quiz-word" style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;">
+          <span>${escapeHtml(cur.word)}</span>
+          ${cur.shortcut ? `<kbd class="word-kbd" title="快捷键 / 命令">${escapeHtml(cur.shortcut)}</kbd>` : ""}
+          <button id="quiz-say-btn" class="icon-mini-btn" title="发音">${SPEAKER_SVG}</button>
+        </div>
         ${cur.phonetic ? `<div class="quiz-phonetic">${escapeHtml(cur.phonetic)}</div>` : ""}
         ${metaBadges.length ? `<div class="quiz-meta-badges">${metaBadges.join("")}</div>` : ""}
         ${cur.example ? `<div class="quiz-hint">"${escapeHtml(cur.example)}"</div>` : ""}
@@ -1966,16 +1974,16 @@
     updateSidebarStatus();
   }
 
-  // ==================== DUAL VOCABULARY HUB (TOEFL + BLENDER 3D + WEAK WORDS + PAGINATION) ====================
+  // ==================== TRI VOCABULARY HUB (TOEFL + BLENDER 3D + ANTIGRAVITY + WEAK WORDS + PAGINATION) ====================
   const VOCAB_PAGE_SIZE = 30;
   const vocabView = {
-    book: "all", // all | weak | toefl_core | blender_3d
+    book: "all", // all | weak | toefl_core | blender_3d | antigravity
     filtered: [],
     renderedCount: 0,
   };
 
   function selectVocabBook(bookId) {
-    const valid = ["all", "weak", "toefl_core", "blender_3d"].includes(bookId) ? bookId : "all";
+    const valid = ["all", "weak", "toefl_core", "blender_3d", "antigravity"].includes(bookId) ? bookId : "all";
     vocabView.book = valid;
     document.querySelectorAll("[data-vocab-book]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.vocabBook === valid);
@@ -1992,7 +2000,7 @@
     }
     // Pre-select matching target in quick JSON importer
     const targetSel = document.getElementById("quick-import-target");
-    if (targetSel && (valid === "toefl_core" || valid === "blender_3d")) {
+    if (targetSel && (valid === "toefl_core" || valid === "blender_3d" || valid === "antigravity")) {
       targetSel.value = valid;
       document.getElementById("quick-import-name")?.classList.add("hidden");
     }
@@ -2138,7 +2146,7 @@
       return;
     }
 
-    const defaultLvl = targetBookId === "blender_3d" ? "3D" : "TOEFL";
+    const defaultLvl = targetBookId === "blender_3d" ? "3D" : targetBookId === "antigravity" ? "AI" : "TOEFL";
     const entries = parseBulkKnowledge(raw, defaultLvl);
     if (!entries.length) {
       if (st) {
@@ -2182,6 +2190,7 @@
       : "—";
     const toeflPack = (state.knowledgePacks || []).find((p) => p.id === "toefl_core");
     const blenderPack = (state.knowledgePacks || []).find((p) => p.id === "blender_3d");
+    const agPack = (state.knowledgePacks || []).find((p) => p.id === "antigravity");
     const totalEntries = (state.knowledgePacks || []).reduce((sum, p) => sum + (p.entries?.length || 0), 0);
     const wEl = document.getElementById("words-sb-weak");
     const aEl = document.getElementById("words-sb-acc");
@@ -2189,7 +2198,7 @@
     if (wEl) wEl.textContent = String(unmastered);
     if (aEl) aEl.textContent = acc;
     if (pEl) {
-      pEl.textContent = `托福 ${toeflPack?.entries?.length || 0} · Blender ${blenderPack?.entries?.length || 0}（共 ${totalEntries} 词）`;
+      pEl.textContent = `托福 ${toeflPack?.entries?.length || 0} · Blender ${blenderPack?.entries?.length || 0} · Antigravity ${agPack?.entries?.length || 0}（共 ${totalEntries} 词）`;
     }
     updateSidebarStatus();
   }
@@ -2290,13 +2299,19 @@
     card.className = `word-item-card${isWeakRow && item.mastered ? " mastered" : ""}`;
 
     const bookId = item.bookId || "";
-    const showBookTag = vocabView.book === "all" || (isWeakRow && (bookId === "toefl_core" || bookId === "blender_3d"));
+    const showBookTag = vocabView.book === "all" || (isWeakRow && (bookId === "toefl_core" || bookId === "blender_3d" || bookId === "antigravity"));
     const bookTagText = bookId === "blender_3d"
       ? "Blender 3D"
+      : bookId === "antigravity"
+      ? "Antigravity"
       : bookId === "toefl_core"
       ? "托福 TOEFL"
       : (item._bookName || "");
-    const bookTagCls = bookId === "blender_3d" ? "word-book-tag blender" : "word-book-tag";
+    const bookTagCls = bookId === "blender_3d"
+      ? "word-book-tag blender"
+      : bookId === "antigravity"
+      ? "word-book-tag antigravity"
+      : "word-book-tag";
 
     const tagsHtml = [];
     if (showBookTag && bookTagText) {
@@ -2313,9 +2328,9 @@
       <div class="word-card-body">
         <div class="word-main">
           <span>${escapeHtml(item.word)}</span>
+          ${item.shortcut ? `<kbd class="word-kbd" title="快捷键 / 命令">${escapeHtml(item.shortcut)}</kbd>` : ""}
           ${item.pos ? `<span class="word-pos-tag">${escapeHtml(item.pos)}</span>` : ""}
           ${item.phonetic ? `<span class="phonetic">${escapeHtml(item.phonetic)}</span>` : ""}
-          ${item.shortcut ? `<kbd class="word-kbd" title="Blender 快捷键">${escapeHtml(item.shortcut)}</kbd>` : ""}
         </div>
         <div class="word-meta">${escapeHtml(item.meaning || "")}</div>
         ${tagsHtml.length ? `<div class="word-tags-row">${tagsHtml.join("")}</div>` : ""}
@@ -2433,7 +2448,7 @@
 
     if (!vocabView.filtered.length) {
       const emptyMsg = vocabView.book === "weak"
-        ? "暂无个人生词记录。Quiz 答错的托福 / Blender 词条，或词表中点击「+ 生词本」的单词都会自动收录在这里！"
+        ? "暂无个人生词记录。Quiz 答错的托福 / Blender / Antigravity 词条，或词表中点击「+ 生词本」的单词都会自动收录在这里！"
         : "未搜索到匹配的词条，可尝试清空搜索词或点击「导入 JSON 词库」扩充词表。";
       list.innerHTML = `<div class="word-meta" style="text-align:center;padding:24px;">${emptyMsg}</div>`;
       updateVocabPaginationBar();
@@ -2442,6 +2457,9 @@
     }
 
     appendNextVocabPage();
+    if (typeof VoiceEngine.prewarm === "function") {
+      VoiceEngine.prewarm(vocabView.filtered.slice(0, 6).map((x) => x.word), state.settings.voice);
+    }
     updateWordsSidebarSummary();
   }
 
@@ -3300,7 +3318,7 @@
     const quizPackSel = document.getElementById("set-quiz-pack");
     if (!quizPackSel) return;
     const s = state.settings || {};
-    quizPackSel.innerHTML = `<option value="all">混合抽查（托福 + Blender 全部已启用）</option><option value="weak">仅个人生词本</option>`;
+    quizPackSel.innerHTML = `<option value="all">混合抽查（托福 + Blender + Antigravity 全部已启用）</option><option value="weak">仅个人生词本</option>`;
     (state.knowledgePacks || []).forEach((pack) => {
       const opt = document.createElement("option");
       opt.value = pack.id;

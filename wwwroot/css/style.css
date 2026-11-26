@@ -1092,7 +1092,10 @@ body[data-theme="dark"] .floating-card {
 
 .quiz-book-pills .seg-pill {
   padding: 4px 2px;
-  font-size: 11px;
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .quiz-body {
@@ -2258,8 +2261,14 @@ body[data-view="settings"] #settings-modal.cv-settings {
 }
 
 .vocab-book-tabs {
-  flex: 1 1 360px;
-  min-width: 280px;
+  flex: 1 1 430px;
+  min-width: 320px;
+}
+
+.vocab-book-tabs .seg-pill {
+  padding: 6px 6px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .words-view-switch {
@@ -2353,6 +2362,16 @@ body[data-view="settings"] #settings-modal.cv-settings {
 body[data-theme="dark"] .word-book-tag.blender {
   background: rgba(251, 146, 60, 0.18);
   color: #FB923C;
+}
+
+.word-book-tag.antigravity {
+  background: rgba(124, 58, 237, 0.12);
+  color: #7C3AED;
+}
+
+body[data-theme="dark"] .word-book-tag.antigravity {
+  background: rgba(167, 139, 250, 0.18);
+  color: #A78BFA;
 }
 
 .word-example {

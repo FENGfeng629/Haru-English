@@ -6,7 +6,7 @@ namespace HaruEnglishPet.Services;
 
 public class StorageService
 {
-    public const int CurrentVocabVersion = 2;
+    public const int CurrentVocabVersion = 3;
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -32,7 +32,7 @@ public class StorageService
         Directory.CreateDirectory(DataDir);
         Directory.CreateDirectory(KnowledgeDir);
         RunVocabMigrationIfNeeded();
-        EnsureDualVocabBooks();
+        EnsureBuiltInVocabBooks();
     }
 
     public AppSettings LoadSettings()
@@ -136,6 +136,7 @@ public class StorageService
         return packs
             .OrderByDescending(p => p.Id == "toefl_core")
             .ThenByDescending(p => p.Id == "blender_3d")
+            .ThenByDescending(p => p.Id == "antigravity")
             .ThenByDescending(p => p.BuiltIn)
             .ThenBy(p => p.Name)
             .ToList();
@@ -213,7 +214,11 @@ public class StorageService
                 Pos = pos,
                 PartOfSpeech = pos,
                 Meaning = raw.Meaning?.Trim() ?? "",
-                Category = string.IsNullOrWhiteSpace(raw.Category) ? (target.Id == "blender_3d" ? "Blender · 自定义" : "导入词条") : raw.Category.Trim(),
+                Category = string.IsNullOrWhiteSpace(raw.Category)
+                    ? (target.Id == "blender_3d" ? "Blender · 自定义"
+                        : target.Id == "antigravity" ? "Antigravity · 自定义"
+                        : "导入词条")
+                    : raw.Category.Trim(),
                 Shortcut = raw.Shortcut?.Trim() ?? "",
                 Example = raw.Example?.Trim() ?? "",
                 ExampleZh = raw.ExampleZh?.Trim() ?? "",
@@ -313,8 +318,9 @@ public class StorageService
     }
 
     /// <summary>
-    /// Version-gated migration (vocabVersion = 2):
-    /// Purges all legacy A1-C2 seed knowledge packs, old weak words, and old word stats
+    /// Version-gated migration (vocabVersion = 3):
+    /// Purges all legacy seed knowledge packs, old weak words, and old word stats
+    /// for the TOEFL + Blender 3D + Antigravity tri-vocab system,
     /// while strictly preserving user API keys, voice config, appearance, hotkeys, and pet position.
     /// </summary>
     private void RunVocabMigrationIfNeeded()
@@ -354,12 +360,12 @@ public class StorageService
         // 2. Clear legacy weak_words.json
         SaveWeakWords(new List<WeakWord>());
 
-        // 3. Reset legacy word/quiz statistics for the new TOEFL + Blender dual-vocab system
+        // 3. Reset legacy word/quiz statistics for the new TOEFL + Blender + Antigravity tri-vocab system
         SaveStats(new StudyStats { TodayDate = DateTime.Now.ToString("yyyy-MM-dd") });
 
         // 4. Preserve ALL user settings (API, Voice, Appearance, Hotkeys, Position, CloudSync),
-        //    only resetting stale QuizPackId and bumping VocabVersion = 2
-        if (settings.QuizPackId is not ("all" or "weak" or "toefl_core" or "blender_3d"))
+        //    only resetting stale QuizPackId and bumping VocabVersion = 3
+        if (settings.QuizPackId is not ("all" or "weak" or "toefl_core" or "blender_3d" or "antigravity"))
         {
             settings.QuizPackId = "all";
         }
@@ -367,13 +373,14 @@ public class StorageService
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
     }
 
-    private void EnsureDualVocabBooks()
+    private void EnsureBuiltInVocabBooks()
     {
         var vocabDir = Path.Combine(AppContext.BaseDirectory, "src", "data", "vocab");
         var seedFiles = new (string fileName, string bookId)[]
         {
             ("toefl.json", "toefl_core"),
-            ("blender.json", "blender_3d")
+            ("blender.json", "blender_3d"),
+            ("antigravity.json", "antigravity")
         };
 
         foreach (var (fileName, bookId) in seedFiles)

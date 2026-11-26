@@ -186,10 +186,11 @@
           </button>
         </div>
         <div class="quiz-book-bar">
-          <div class="seg-pills seg-4 quiz-book-pills" role="group" aria-label="抽查词库切换">
+          <div class="seg-pills seg-5 quiz-book-pills" role="group" aria-label="抽查词库切换">
             <button type="button" class="seg-pill active" data-quiz-book="all">混合</button>
             <button type="button" class="seg-pill" data-quiz-book="toefl_core">托福</button>
             <button type="button" class="seg-pill" data-quiz-book="blender_3d">Blender</button>
+            <button type="button" class="seg-pill" data-quiz-book="antigravity">Antigravity</button>
             <button type="button" class="seg-pill" data-quiz-book="weak">生词</button>
           </div>
         </div>
@@ -545,15 +546,16 @@
             </section>
           </div>
 
-          <!-- ==================== PAGE 2.5: 词库中心（托福 TOEFL + Blender 3D + 个人生词本 + 统计） ==================== -->
+          <!-- ==================== PAGE 2.5: 词库中心（托福 TOEFL + Blender 3D + Antigravity + 个人生词本 + 统计） ==================== -->
           <div id="set-tab-words" class="words-hub-page hidden">
-            <!-- Top Row: 4-Way Vocab Book Switcher Capsules + View Mode Switch -->
+            <!-- Top Row: 5-Way Vocab Book Switcher Capsules + View Mode Switch -->
             <div class="words-subnav-bar">
-              <div class="seg-pills seg-4 vocab-book-tabs" role="tablist" aria-label="词库切换">
+              <div class="seg-pills seg-5 vocab-book-tabs" role="tablist" aria-label="词库切换">
                 <button type="button" class="seg-pill active" data-vocab-book="all" role="tab">全部</button>
-                <button type="button" class="seg-pill" data-vocab-book="weak" role="tab">个人生词本</button>
+                <button type="button" class="seg-pill" data-vocab-book="weak" role="tab">生词本</button>
                 <button type="button" class="seg-pill" data-vocab-book="toefl_core" role="tab">托福 TOEFL</button>
                 <button type="button" class="seg-pill" data-vocab-book="blender_3d" role="tab">Blender 3D</button>
+                <button type="button" class="seg-pill" data-vocab-book="antigravity" role="tab">Antigravity</button>
               </div>
               <div class="seg-pills seg-3 words-view-switch" role="tablist" aria-label="视图切换">
                 <button type="button" class="seg-pill active" data-words-tab="weak" role="tab">词表</button>
@@ -568,11 +570,11 @@
               <span id="words-sb-packs" class="words-meta-pill">词库已就绪</span>
             </div>
 
-            <!-- View 1: Unified Paginated Vocabulary Browser (All / Weak Words / TOEFL / Blender 3D) -->
+            <!-- View 1: Unified Paginated Vocabulary Browser (All / Weak Words / TOEFL / Blender 3D / Antigravity) -->
             <div id="tab-weak" class="words-pane">
               <div class="bento-card words-toolbar-card">
                 <div class="toolbar-row compact-toolbar">
-                  <input id="weak-search" type="text" class="s-input words-search-input" placeholder="搜索单词、中文释义、分类或快捷键（如 Ctrl + B）..." />
+                  <input id="weak-search" type="text" class="s-input words-search-input" placeholder="搜索单词、中文释义、分类或快捷键（如 Ctrl + B、/plan）..." />
                   <select id="weak-filter" class="s-select words-filter-select hidden">
                     <option value="unmastered">待巩固</option>
                     <option value="all">全部</option>
@@ -601,12 +603,13 @@
                 </div>
               </div>
 
-              <!-- Inline One-Click JSON Vocab Importer (Append to TOEFL / Blender or Create Custom Pack) -->
+              <!-- Inline One-Click JSON Vocab Importer (Append to TOEFL / Blender / Antigravity or Create Custom Pack) -->
               <div id="quick-import-form" class="bento-card import-box hidden">
                 <div class="bento-inline-grid-2">
                   <select id="quick-import-target" class="s-select">
                     <option value="toefl_core">追加合并到「托福 TOEFL」</option>
                     <option value="blender_3d">追加合并到「Blender 3D」</option>
+                    <option value="antigravity">追加合并到「Antigravity」</option>
                     <option value="new">新建独立自定义词库</option>
                   </select>
                   <input id="quick-import-name" class="s-input hidden" placeholder="新词库名称（如：托福核心 3000 词）" />
@@ -647,6 +650,7 @@
                   <select id="pack-level" class="s-select">
                     <option value="TOEFL" selected>TOEFL 托福</option>
                     <option value="3D">Blender 3D</option>
+                    <option value="AI">Antigravity</option>
                     <option value="Custom">自定义词库</option>
                   </select>
                 </div>

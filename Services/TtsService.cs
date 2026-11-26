@@ -18,7 +18,7 @@ public class TtsService
     private const string EdgeChromiumFullVersion = "143.0.3650.75";
     private const string EdgeChromiumMajorVersion = "143";
     private const string EdgeSecMsGecVersion = "2-" + EdgeChromiumFullVersion;
-    private const int MaxDiskCacheFiles = 250;
+    private const int MaxDiskCacheFiles = 600;
 
     private sealed record CachedAudio(string AudioBase64, string MimeType, string Provider, string Voice);
 
@@ -135,101 +135,59 @@ public class TtsService
             return BuildSuccessJson(cached);
         }
 
-        // 2. Join an already-running background prewarm for this exact phrase & voice if one exists
-        if (_inflightPrewarm.TryGetValue(cacheKey, out var inflightTask))
-        {
-            try
-            {
-                var prewarmed = await inflightTask.WaitAsync(ct);
-                if (ct.IsCancellationRequested)
-                    return new JsonObject { ["ok"] = false, ["cancelled"] = true };
-                if (prewarmed != null)
-                    return BuildSuccessJson(prewarmed);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                return new JsonObject { ["ok"] = false, ["cancelled"] = true };
-            }
-            catch { }
-        }
+        // 2. Join or create a shared in-flight synthesis for this exact phrase & voice
+        //    so rapid clicks on the speaker icon never cancel & restart a cold Edge WebSocket!
+        var sharedTask = _inflightPrewarm.GetOrAdd(
+            cacheKey,
+            _ => SynthesizeAndCacheCoreAsync(voice, api, cleanText, provider, voiceName, cacheKey, CancellationToken.None));
 
-        // 3. Ensure clock skew is synced once before Edge TTS (avoids 2.7s cold 403 fail)
-        if (provider == "edge" && !_clockSyncedOnce)
+        try
         {
-            try { await WarmupClockAsync(ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                return new JsonObject { ["ok"] = false, ["cancelled"] = true };
-            }
-            catch { }
-        }
-
-        if (provider == "openai")
-        {
-            var oaResult = await SynthesizeOpenAiAsync(voice, api, cleanText, ct);
+            var synthesized = await sharedTask.WaitAsync(ct);
             if (ct.IsCancellationRequested)
                 return new JsonObject { ["ok"] = false, ["cancelled"] = true };
-            if (oaResult["ok"]?.GetValue<bool>() == true)
-            {
-                var b64 = oaResult["audioBase64"]?.ToString();
-                if (!string.IsNullOrEmpty(b64))
-                {
-                    SaveToCache(cacheKey, Convert.FromBase64String(b64), new CachedAudio(b64, "audio/mpeg", "openai", voiceName));
-                }
-                return oaResult;
-            }
-            // Fallback to Edge or WebSpeech
+            if (synthesized != null)
+                return BuildSuccessJson(synthesized);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return new JsonObject { ["ok"] = false, ["cancelled"] = true };
+        }
+        catch { }
+        finally
+        {
+            if (sharedTask.IsCompleted)
+                _inflightPrewarm.TryRemove(new KeyValuePair<string, Task<CachedAudio?>>(cacheKey, sharedTask));
+        }
+
+        // 3. Fallback path if OpenAI failed (try Edge) or return WebSpeech fallback
+        if (provider == "openai")
+        {
             var edgeFallbackVoice = string.IsNullOrWhiteSpace(voice.EdgeVoice) ? "en-US-AnaNeural" : voice.EdgeVoice;
             var edgeFallbackKey = BuildCacheKey("edge", edgeFallbackVoice, voice.SpeechRate, voice.SpeechPitch, cleanText);
             if (TryGetCached(edgeFallbackKey, "edge", edgeFallbackVoice, out var fallbackCached))
                 return BuildSuccessJson(fallbackCached);
-            voiceName = edgeFallbackVoice;
-            cacheKey = edgeFallbackKey;
-        }
 
-        // Try Microsoft Edge Neural TTS (Free high-quality neural English voices, Sec-MS-GEC v2)
-        var edgeVoice = string.IsNullOrWhiteSpace(voice.EdgeVoice) ? "en-US-AnaNeural" : voice.EdgeVoice;
-        string? lastError = null;
-        for (int attempt = 0; attempt < 2; attempt++)
-        {
-            if (ct.IsCancellationRequested)
-                return new JsonObject { ["ok"] = false, ["cancelled"] = true };
-
+            var edgeTask = _inflightPrewarm.GetOrAdd(
+                edgeFallbackKey,
+                _ => SynthesizeAndCacheCoreAsync(voice, api, cleanText, "edge", edgeFallbackVoice, edgeFallbackKey, CancellationToken.None));
             try
             {
-                var mp3 = await SynthesizeEdgeNeuralAsync(
-                    edgeVoice,
-                    cleanText,
-                    voice.SpeechRate,
-                    voice.SpeechPitch,
-                    ct
-                );
+                var edgeSynthesized = await edgeTask.WaitAsync(ct);
                 if (ct.IsCancellationRequested)
                     return new JsonObject { ["ok"] = false, ["cancelled"] = true };
-                if (mp3.Length > 0)
-                {
-                    var b64 = Convert.ToBase64String(mp3);
-                    var entry = new CachedAudio(b64, "audio/mpeg", "edge", edgeVoice);
-                    SaveToCache(cacheKey, mp3, entry);
-                    return BuildSuccessJson(entry);
-                }
+                if (edgeSynthesized != null)
+                    return BuildSuccessJson(edgeSynthesized);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 return new JsonObject { ["ok"] = false, ["cancelled"] = true };
             }
-            catch (Exception ex)
+            catch { }
+            finally
             {
-                if (ct.IsCancellationRequested)
-                    return new JsonObject { ["ok"] = false, ["cancelled"] = true };
-                lastError = ex.Message;
-                // On first 403/handshake failure, sync clock skew from Bing server Date header and retry once
-                if (attempt == 0)
-                {
-                    var synced = await TrySyncServerClockSkewAsync(ct);
-                    if (synced) continue;
-                }
-                break;
+                if (edgeTask.IsCompleted)
+                    _inflightPrewarm.TryRemove(new KeyValuePair<string, Task<CachedAudio?>>(edgeFallbackKey, edgeTask));
             }
         }
 
@@ -241,13 +199,18 @@ public class TtsService
             ["ok"] = false,
             ["fallbackToWebSpeech"] = true,
             ["provider"] = "webspeech",
-            ["error"] = lastError ?? "Edge TTS unavailable"
+            ["error"] = "Edge TTS unavailable"
         };
     }
 
     private async Task<CachedAudio?> SynthesizeAndCacheCoreAsync(
         VoiceConfig voice, ApiConfig api, string text, string provider, string voiceName, string cacheKey, CancellationToken ct)
     {
+        if (provider == "edge" && !_clockSyncedOnce)
+        {
+            try { await WarmupClockAsync(ct); } catch { }
+        }
+
         if (provider == "openai")
         {
             var oaRes = await SynthesizeOpenAiAsync(voice, api, text, ct);

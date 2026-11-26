@@ -37,14 +37,14 @@
 - 内置 16 个英文表情与动作词条，支持按「全部 / 表情 / 动作」筛选。
 - 点击任意英文词条，Haru 会立刻做出对应 Live2D 表情或动作并大声朗读单词与例句，支持一键收入个人生词本。
 
-### 4. 托福 & Blender 3D & Antigravity 词库中心与抽查测验 (Vocabulary Hub & Quiz)
-- **三大核心内置词库 + 个人生词本**：
-  - **托福 TOEFL**：精选托福高频学术词汇，含音标、词性、中文释义、学科分类与双语例句。
-  - **Blender 3D**：精选 Blender 3D 英文界面高频专业术语（如 `Extrude`、`Bevel`、`Loop Cut`、`Normals`、`Subdivision Surface` 等），附带对应**快捷键**与建模场景例句。
-  - **Antigravity**：精选 Antigravity AI 编程与智能体高频英文术语（如 `Agent`、`Implementation Plan`、`Artifact`、`Subagent`、`Swarm`、`MCP Server`、`Inline Edit` 等），附带对应**斜杠命令与快捷键**（如 `/plan`、`/goal`、`/compact`、`Ctrl + I`）。
+### 4. 托福 & Blender 3D & Antigravity 全量三词库与抽查测验 (Vocabulary Hub & Quiz)
+- **三大全量内置词库（共 4,621 词）+ 个人生词本**：
+  - **托福 TOEFL（4,264 词）**：基于开源词库 `kajweb/dict` 构建的托福 iBT 全量高频词库，含音标、词性、学科/词频分类与双语例句。
+  - **Blender 3D（256 词）**：参考 Blender 官方文档与简体中文术语规范，覆盖 Modeling / Viewport / Modifiers / Shader Nodes / Geometry Nodes / UV / Sculpt / Render / Rigging / Physics 全流程高频专业术语，附带对应**快捷键**与实操双语例句。
+  - **Antigravity（101 词）**：基于 `antigravity.google/llms.txt` 官方文档索引提取，覆盖 Antigravity IDE、2.0 App、CLI (`agy`)、Python SDK、Customizations（Skills / Rules / Plugins / Hooks / MCP / Sidecars）、Slash Commands、Swarm/Subagents 与 Terminal Sandbox/Permissions，附带对应**命令与快捷键**（如 `/plan`、`Ctrl+I`、`SKILL.md`、`agy`）。
   - **个人生词本**：支持手动添加词条、标记掌握状态、筛选待巩固词汇，抽查答错的词会自动收录。
-- **词表 / 词库包 / 统计三视图 & 大词量分页**：顶部支持「全部 / 生词本 / 托福 TOEFL / Blender 3D / Antigravity」一键切换，单词卡片展示分类标签与等宽快捷键徽章；列表采用每页 30 条增量分页加载以流畅承载数千词规模，也支持 `.json` / `.txt` / `.csv` 批量导入。
-- **手动 & 待机自动单词抽查（Quiz）**：每组 4 题，支持自动预热音频实现零延迟点读，测验卡片顶部可一键切换「混合 / 托福 / Blender / Antigravity / 生词」；待机抽查频率支持「关闭 / 30 分钟 / 12 分钟 / 5 分钟」。
+- **大词量丝滑体验（词表 / 词库包 / 统计三视图）**：顶部支持「全部 / 生词本 / 托福 TOEFL / Blender 3D / Antigravity」一键切换，单词卡片展示分类标签与等宽快捷键徽章；列表采用**每页 30 条增量分页加载 + 搜索防抖**，4,600+ 词搜索与滚动依然流畅不卡顿，并支持通过 `scripts/build_vocabs.py` 一键重建全量词库或导入 `.json` / `.txt` / `.csv` 扩展。
+- **手动 & 待机自动单词抽查（Quiz）**：每组 4 题，支持自动预热音频与 Web Audio 内存缓存实现零延迟点读，测验卡片顶部可一键切换「混合 / 托福 / Blender / Antigravity / 生词」；待机抽查频率支持「关闭 / 30 分钟 / 12 分钟 / 5 分钟」。
 
 ### 5. 现代化独立设置中心 & 数据同步 (Settings & Sync)
 - **6 大侧边栏分区**（总览与外观、英语学习、词库中心、AI 模型接口、语音与听力、数据与设置），所有修改实时自动保存，左下角常驻状态卡片展示生词本数量、今日专注时长与当前模式。

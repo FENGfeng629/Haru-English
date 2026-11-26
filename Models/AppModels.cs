@@ -122,7 +122,7 @@ public class StudyStats
 public class KnowledgeEntry
 {
     public string Id { get; set; } = "";
-    public string BookId { get; set; } = ""; // toefl_core | blender_3d | antigravity | custom
+    public string BookId { get; set; } = ""; // toefl | blender | antigravity | custom
     public string Word { get; set; } = "";
     public string Phonetic { get; set; } = "";
     public string Pos { get; set; } = "";

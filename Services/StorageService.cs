@@ -6,7 +6,7 @@ namespace HaruEnglishPet.Services;
 
 public class StorageService
 {
-    public const int CurrentVocabVersion = 3;
+    public const int CurrentVocabVersion = 4;
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -134,8 +134,8 @@ public class StorageService
             }
         }
         return packs
-            .OrderByDescending(p => p.Id == "toefl_core")
-            .ThenByDescending(p => p.Id == "blender_3d")
+            .OrderByDescending(p => p.Id == "toefl")
+            .ThenByDescending(p => p.Id == "blender")
             .ThenByDescending(p => p.Id == "antigravity")
             .ThenByDescending(p => p.BuiltIn)
             .ThenBy(p => p.Name)
@@ -215,7 +215,7 @@ public class StorageService
                 PartOfSpeech = pos,
                 Meaning = raw.Meaning?.Trim() ?? "",
                 Category = string.IsNullOrWhiteSpace(raw.Category)
-                    ? (target.Id == "blender_3d" ? "Blender · 自定义"
+                    ? (target.Id == "blender" ? "Blender · 自定义"
                         : target.Id == "antigravity" ? "Antigravity · 自定义"
                         : "导入词条")
                     : raw.Category.Trim(),
@@ -364,8 +364,10 @@ public class StorageService
         SaveStats(new StudyStats { TodayDate = DateTime.Now.ToString("yyyy-MM-dd") });
 
         // 4. Preserve ALL user settings (API, Voice, Appearance, Hotkeys, Position, CloudSync),
-        //    only resetting stale QuizPackId and bumping VocabVersion = 3
-        if (settings.QuizPackId is not ("all" or "weak" or "toefl_core" or "blender_3d" or "antigravity"))
+        //    only migrating/resetting stale QuizPackId and bumping VocabVersion = 4
+        if (settings.QuizPackId == "toefl_core") settings.QuizPackId = "toefl";
+        else if (settings.QuizPackId == "blender_3d") settings.QuizPackId = "blender";
+        if (settings.QuizPackId is not ("all" or "weak" or "toefl" or "blender" or "antigravity"))
         {
             settings.QuizPackId = "all";
         }
@@ -378,8 +380,8 @@ public class StorageService
         var vocabDir = Path.Combine(AppContext.BaseDirectory, "src", "data", "vocab");
         var seedFiles = new (string fileName, string bookId)[]
         {
-            ("toefl.json", "toefl_core"),
-            ("blender.json", "blender_3d"),
+            ("toefl.json", "toefl"),
+            ("blender.json", "blender"),
             ("antigravity.json", "antigravity")
         };
 

@@ -1534,8 +1534,8 @@
 
   // ==================== PROACTIVE IDLE WORD QUIZ (TOEFL + BLENDER 3D + ANTIGRAVITY + WEAK WORDS) ====================
   function getBookDisplayName(bookId) {
-    if (bookId === "toefl_core") return "托福 TOEFL";
-    if (bookId === "blender_3d") return "Blender 3D";
+    if (bookId === "toefl" || bookId === "toefl_core") return "托福 TOEFL";
+    if (bookId === "blender" || bookId === "blender_3d") return "Blender 3D";
     if (bookId === "antigravity") return "Antigravity";
     if (bookId === "weak") return "个人生词本";
     if (bookId === "all") return "混合抽查";
@@ -1976,14 +1976,15 @@
 
   // ==================== TRI VOCABULARY HUB (TOEFL + BLENDER 3D + ANTIGRAVITY + WEAK WORDS + PAGINATION) ====================
   const VOCAB_PAGE_SIZE = 30;
+  let vocabSearchDebounceTimer = null;
   const vocabView = {
-    book: "all", // all | weak | toefl_core | blender_3d | antigravity
+    book: "all", // all | weak | toefl | blender | antigravity
     filtered: [],
     renderedCount: 0,
   };
 
   function selectVocabBook(bookId) {
-    const valid = ["all", "weak", "toefl_core", "blender_3d", "antigravity"].includes(bookId) ? bookId : "all";
+    const valid = ["all", "weak", "toefl", "blender", "antigravity"].includes(bookId) ? bookId : "all";
     vocabView.book = valid;
     document.querySelectorAll("[data-vocab-book]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.vocabBook === valid);
@@ -2000,7 +2001,7 @@
     }
     // Pre-select matching target in quick JSON importer
     const targetSel = document.getElementById("quick-import-target");
-    if (targetSel && (valid === "toefl_core" || valid === "blender_3d" || valid === "antigravity")) {
+    if (targetSel && (valid === "toefl" || valid === "blender" || valid === "antigravity")) {
       targetSel.value = valid;
       document.getElementById("quick-import-name")?.classList.add("hidden");
     }
@@ -2022,7 +2023,10 @@
       });
     });
 
-    document.getElementById("weak-search")?.addEventListener("input", () => renderWeakWordsList());
+    document.getElementById("weak-search")?.addEventListener("input", () => {
+      if (vocabSearchDebounceTimer) clearTimeout(vocabSearchDebounceTimer);
+      vocabSearchDebounceTimer = setTimeout(() => renderWeakWordsList(), 140);
+    });
     document.getElementById("weak-filter")?.addEventListener("change", () => renderWeakWordsList());
     document.getElementById("btn-quiz-weak")?.addEventListener("click", () => {
       const targetBook = vocabView.book || "all";
@@ -2042,7 +2046,7 @@
       const shortcut = (document.getElementById("new-weak-shortcut")?.value || "").trim();
       const category = (document.getElementById("new-weak-category")?.value || "").trim();
       addOrUpdateWeakWord({
-        bookId: shortcut ? "blender_3d" : "weak",
+        bookId: shortcut ? (shortcut.startsWith("/") ? "antigravity" : "blender") : "weak",
         word,
         phonetic: document.getElementById("new-weak-phonetic").value.trim(),
         meaning,
@@ -2135,7 +2139,7 @@
 
   async function handleQuickJsonImport() {
     const raw = (document.getElementById("quick-import-text")?.value || "").trim();
-    const targetBookId = document.getElementById("quick-import-target")?.value || "toefl_core";
+    const targetBookId = document.getElementById("quick-import-target")?.value || "toefl";
     const newName = (document.getElementById("quick-import-name")?.value || "").trim();
     const st = document.getElementById("quick-import-status");
     if (!raw) {
@@ -2146,7 +2150,7 @@
       return;
     }
 
-    const defaultLvl = targetBookId === "blender_3d" ? "3D" : targetBookId === "antigravity" ? "AI" : "TOEFL";
+    const defaultLvl = targetBookId === "blender" ? "3D" : targetBookId === "antigravity" ? "AI" : "TOEFL";
     const entries = parseBulkKnowledge(raw, defaultLvl);
     if (!entries.length) {
       if (st) {
@@ -2188,8 +2192,8 @@
     const acc = (s.totalQuizCorrect + s.totalQuizWrong) > 0
       ? Math.round((s.totalQuizCorrect * 100) / (s.totalQuizCorrect + s.totalQuizWrong)) + "%"
       : "—";
-    const toeflPack = (state.knowledgePacks || []).find((p) => p.id === "toefl_core");
-    const blenderPack = (state.knowledgePacks || []).find((p) => p.id === "blender_3d");
+    const toeflPack = (state.knowledgePacks || []).find((p) => p.id === "toefl");
+    const blenderPack = (state.knowledgePacks || []).find((p) => p.id === "blender");
     const agPack = (state.knowledgePacks || []).find((p) => p.id === "antigravity");
     const totalEntries = (state.knowledgePacks || []).reduce((sum, p) => sum + (p.entries?.length || 0), 0);
     const wEl = document.getElementById("words-sb-weak");
@@ -2299,15 +2303,15 @@
     card.className = `word-item-card${isWeakRow && item.mastered ? " mastered" : ""}`;
 
     const bookId = item.bookId || "";
-    const showBookTag = vocabView.book === "all" || (isWeakRow && (bookId === "toefl_core" || bookId === "blender_3d" || bookId === "antigravity"));
-    const bookTagText = bookId === "blender_3d"
+    const showBookTag = vocabView.book === "all" || (isWeakRow && (bookId === "toefl" || bookId === "blender" || bookId === "antigravity"));
+    const bookTagText = bookId === "blender"
       ? "Blender 3D"
       : bookId === "antigravity"
       ? "Antigravity"
-      : bookId === "toefl_core"
+      : bookId === "toefl"
       ? "托福 TOEFL"
       : (item._bookName || "");
-    const bookTagCls = bookId === "blender_3d"
+    const bookTagCls = bookId === "blender"
       ? "word-book-tag blender"
       : bookId === "antigravity"
       ? "word-book-tag antigravity"

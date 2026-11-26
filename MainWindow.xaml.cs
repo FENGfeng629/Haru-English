@@ -1456,7 +1456,7 @@ public partial class MainWindow : Window
 
             case "importVocabEntries":
             {
-                var targetBookId = payload["targetBookId"]?.ToString() ?? "toefl_core";
+                var targetBookId = payload["targetBookId"]?.ToString() ?? "toefl";
                 var name = payload["name"]?.ToString();
                 var desc = payload["description"]?.ToString();
                 var level = payload["level"]?.ToString();

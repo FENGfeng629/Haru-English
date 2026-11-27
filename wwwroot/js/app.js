@@ -687,7 +687,7 @@
       h = workH;
     } else {
       // 1. Base union: Pet + proportionally scaled Side Dock (with 14px breathing gap)
-      const dockExtra = Math.round(20 * dockScale);
+      const dockExtra = Math.round(20 * activeScale);
       let minX = flipLeft ? petX - dockW - dockExtra : petX;
       let maxX = flipLeft ? petX + petW : petX + petW + dockW + dockExtra;
       let minY = Math.min(petY, petY + petH - dockH);

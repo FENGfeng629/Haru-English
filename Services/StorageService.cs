@@ -6,7 +6,7 @@ namespace HaruEnglishPet.Services;
 
 public class StorageService
 {
-    public const int CurrentVocabVersion = 5;
+    public const int CurrentVocabVersion = 6;
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {

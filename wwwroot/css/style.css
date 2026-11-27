@@ -339,7 +339,7 @@ input, textarea, select, .chat-msg-text, .bubble-en, .bubble-zh {
 /* Pet-Adjacent Frosted Floating Side Dock (精致紧凑磨砂胶囊 + 随桌宠比例协调缩放) */
 .side-dock {
   position: absolute;
-  left: calc(100% - calc(8px * var(--dock-scale)));
+  left: calc(100% + calc(14px * var(--dock-scale)));
   bottom: 12%;
   z-index: 45;
   display: flex;
@@ -381,7 +381,7 @@ body[data-theme="dark"] .side-dock.active-dock {
 }
 
 #pet-anchor.flip-left .side-dock {
-  left: calc(-40px * var(--dock-scale));
+  left: calc(-62px * var(--dock-scale));
 }
 
 /* Smooth GPU-accelerated sliding highlight pill */
@@ -3468,4 +3468,149 @@ body[data-theme="dark"] .srs-pill.mastered {
 .word-kbd {
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   box-shadow: 0 1px 0 var(--border);
+}
+
+/* ==================== MINI IDLE BUBBLE & 5-WORD BATCH BROWSE ==================== */
+.mini-idle-bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 280px;
+  min-width: 190px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  z-index: 45;
+  opacity: 1;
+  transition: opacity 0.28s ease, transform 0.24s ease;
+}
+
+body[data-theme="dark"] .mini-idle-bubble {
+  background: rgba(15, 23, 42, 0.86);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.mini-idle-bubble.fading {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.mini-idle-content {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-main);
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mini-idle-content:hover {
+  color: var(--accent);
+}
+
+.mini-idle-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.mini-idle-icon-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-sub);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mini-idle-icon-btn:hover {
+  background: var(--bg-soft);
+  color: var(--accent);
+}
+
+.teach-nav-row {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.teach-btn-prev {
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.teach-btn-prev:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.teach-btn-prev:not(:disabled):hover {
+  background: var(--bg-soft);
+}
+
+.teach-btn-next {
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: #FFFFFF;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.15s ease;
+}
+
+.teach-btn-next:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.teach-skip-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.teach-btn-skip-one {
+  border: none;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.teach-btn-skip-one:hover {
+  color: var(--accent);
+  background: var(--bg-soft);
 }

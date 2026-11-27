@@ -45,6 +45,9 @@
     lastActiveStudyPing: Date.now(),
     lastSpokenText: "",
     bubbleTimer: null,
+    miniIdleTimer: null,
+    miniIdleHovered: false,
+    idleSnoozeUntil: 0,
     quiz: null,
     currentActionWord: null,
     petPos: { x: 0, y: 0 },
@@ -683,9 +686,10 @@
       w = workW;
       h = workH;
     } else {
-      // 1. Base union: Pet + proportionally scaled Side Dock
-      let minX = flipLeft ? petX - dockW : petX;
-      let maxX = flipLeft ? petX + petW : petX + petW + dockW;
+      // 1. Base union: Pet + proportionally scaled Side Dock (with 14px breathing gap)
+      const dockExtra = Math.round(20 * dockScale);
+      let minX = flipLeft ? petX - dockW - dockExtra : petX;
+      let maxX = flipLeft ? petX + petW : petX + petW + dockW + dockExtra;
       let minY = Math.min(petY, petY + petH - dockH);
       let maxY = petY + petH;
 
@@ -699,6 +703,14 @@
           minY = Math.min(minY, bm.top - 10);
           maxY = Math.max(maxY, bm.bottom + 10);
         }
+      }
+
+      // 2b. Compact Mini Idle Bubble above Haru's head
+      const miniBubble = document.getElementById("mini-idle-bubble");
+      if (miniBubble && !miniBubble.classList.contains("hidden")) {
+        minX = Math.min(minX, petX - 50);
+        maxX = Math.max(maxX, petX + petW + 50);
+        minY = Math.min(minY, petY - 82);
       }
 
       // 3. Floating panel beside pet (coordinated with Haru's height & scale => zero resize jitter when switching!)
@@ -1855,6 +1867,129 @@
     });
   }
 
+  // ==================== MINI IDLE BUBBLE (NON-INTRUSIVE, 6s AUTO-FADE, 2H SNOOZE) ====================
+  function hideMiniIdleBubble(immediate = false) {
+    const el = document.getElementById("mini-idle-bubble");
+    if (!el) return;
+    if (state.miniIdleTimer) {
+      clearTimeout(state.miniIdleTimer);
+      state.miniIdleTimer = null;
+    }
+    if (el.classList.contains("hidden")) return;
+    if (immediate) {
+      el.classList.remove("fading");
+      el.classList.add("hidden");
+      syncWindowBounds(true);
+      return;
+    }
+    el.classList.add("fading");
+    setTimeout(() => {
+      if (!state.miniIdleHovered) {
+        el.classList.remove("fading");
+        el.classList.add("hidden");
+        syncWindowBounds(true);
+      }
+    }, 280);
+  }
+
+  function scheduleMiniIdleAutoFade() {
+    if (state.miniIdleTimer) clearTimeout(state.miniIdleTimer);
+    state.miniIdleTimer = setTimeout(() => {
+      if (!state.miniIdleHovered) hideMiniIdleBubble(false);
+    }, 6000);
+  }
+
+  function showMiniIdleBubble(html, onClickAction) {
+    const el = document.getElementById("mini-idle-bubble");
+    const content = document.getElementById("mini-idle-content");
+    if (!el || !content) return;
+    hideBubble(false);
+    content.innerHTML = html;
+    content.onclick = () => {
+      hideMiniIdleBubble(true);
+      if (typeof onClickAction === "function") onClickAction();
+    };
+    el.classList.remove("hidden", "fading");
+    syncWindowBounds(true);
+    scheduleMiniIdleAutoFade();
+  }
+
+  function triggerIdleMiniBubble() {
+    if (Date.now() < (state.idleSnoozeUntil || 0)) return;
+    ensureDailyActivePool(true);
+    const activeBook = state.settings?.quizPackId || "all";
+    const now = Date.now();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    const { map } = buildAllEntriesIndex();
+
+    // Mode A: Anti-forgetting light check (learned word reviewed >= 1 day ago)
+    const oldLearned = Object.values(state.vocabProgress?.items || [])
+      .filter((p) => {
+        if (!p || (p.status !== "learning" && p.status !== "reviewing")) return false;
+        const entry = map.get(p.key);
+        if (!entry) return false;
+        if (activeBook !== "all" && activeBook !== "weak" && entry.bookId !== activeBook) return false;
+        const lastMs = p.lastReviewedAt ? Date.parse(p.lastReviewedAt) : 0;
+        return (lastMs > 0 && now - lastMs >= ONE_DAY) || ((Number(p.nextReviewAt) || 0) > 0 && Number(p.nextReviewAt) <= now);
+      });
+
+    if (oldLearned.length > 0) {
+      const pick = oldLearned[Math.floor(Math.random() * oldLearned.length)];
+      const entry = map.get(pick.key);
+      if (entry) {
+        const sc = entry.shortcut ? ` <kbd class="word-kbd">${escapeHtml(entry.shortcut)}</kbd>` : "";
+        showMiniIdleBubble(
+          `🧠 还记得 <strong>${escapeHtml(entry.word)}</strong>${sc} 的功能/释义吗？（点击作答）`,
+          () => startSingleWordQuiz(entry)
+        );
+        return;
+      }
+    }
+
+    // Mode B: Light teaching tip from today's unseen or active words
+    const unseen = collectUnseenDailyItems(activeBook);
+    const candidates = unseen.length > 0 ? unseen : collectDueReviewItems(activeBook, true);
+    if (!candidates.length) return;
+    const item = candidates[Math.floor(Math.random() * Math.min(candidates.length, 5))];
+    const isSoft = item.bookId === "blender" || item.bookId === "antigravity";
+    const bookTag = item.bookId === "blender" ? "Blender" : item.bookId === "antigravity" ? "Antigravity" : "";
+    const sc = item.shortcut ? ` [${escapeHtml(item.shortcut)}]` : "";
+    const shortMeaning = (item.meaning || "").slice(0, 20);
+    const html = isSoft
+      ? `💡 <strong>${bookTag} · ${escapeHtml(item.word)}</strong>${sc} = ${escapeHtml(shortMeaning)}（点击查看详情）`
+      : `📖 <strong>${escapeHtml(item.word)}</strong> — ${escapeHtml(shortMeaning)}（点我看例句）`;
+
+    showMiniIdleBubble(html, () => startWordQuiz(activeBook === "weak", false, activeBook));
+  }
+
+  function startSingleWordQuiz(entry) {
+    const { byBook } = buildAllEntriesIndex();
+    const prog = getWordProgress(entry.word);
+    const qItem = {
+      ...entry,
+      streak: prog?.streak || 0,
+      status: prog?.status || "learning",
+      nextReviewAt: prog?.nextReviewAt || 0
+    };
+    if (typeof VoiceEngine.prewarm === "function") {
+      VoiceEngine.prewarm([qItem.word], state.settings.voice);
+    }
+    state.quiz = {
+      mode: "quiz",
+      bookId: entry.bookId || "all",
+      questions: [qItem],
+      allPool: byBook.all,
+      index: 0,
+      correct: 0,
+      missed: [],
+      answered: false
+    };
+    closeModals();
+    toggleFloatingPanel("quiz", true);
+    HaruPet.performAction("excited");
+    renderQuizQuestion();
+  }
+
   function setupQuizPanel() {
     document.querySelectorAll("[data-quiz-book]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1864,6 +1999,34 @@
         HostBridge.rpc("saveSettings", state.settings);
         startWordQuiz(nextBook === "weak", false, nextBook);
       });
+    });
+
+    const miniEl = document.getElementById("mini-idle-bubble");
+    miniEl?.addEventListener("mouseenter", () => {
+      state.miniIdleHovered = true;
+      if (state.miniIdleTimer) {
+        clearTimeout(state.miniIdleTimer);
+        state.miniIdleTimer = null;
+      }
+      miniEl.classList.remove("fading");
+    });
+    miniEl?.addEventListener("mouseleave", () => {
+      state.miniIdleHovered = false;
+      scheduleMiniIdleAutoFade();
+    });
+    document.getElementById("btn-mini-close")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hideMiniIdleBubble(true);
+    });
+    document.getElementById("btn-mini-snooze")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.idleSnoozeUntil = Date.now() + 2 * 60 * 60 * 1000;
+      hideMiniIdleBubble(true);
+      showBubble(
+        "Got it! I'll stay quiet for the next 2 hours.",
+        "好的！2 小时内不再主动待机冒泡打扰你，明天会自动恢复哦～",
+        { badge: "🔕 勿扰 2 小时", speak: false, duration: 3500 }
+      );
     });
   }
 
@@ -1940,7 +2103,14 @@
     return list;
   }
 
+  const BATCH_SIZE = 5;
+
   function startWordQuiz(weakOnly = false, isProactiveIdle = false, bookOverride = null, options = {}) {
+    if (isProactiveIdle) {
+      triggerIdleMiniBubble();
+      return;
+    }
+    hideMiniIdleBubble(true);
     ensureDailyActivePool(true);
     const activeBook = bookOverride || (weakOnly ? "weak" : (state.settings?.quizPackId || "all"));
     syncQuizBookButtons(activeBook);
@@ -1948,80 +2118,85 @@
     const { byBook } = buildAllEntriesIndex();
     const allowEarly = !!options.earlyReview;
 
-    // 1. Priority 1: Due spaced-repetition reviews (STRICTLY learning/reviewing — NEVER unseen!)
-    const dueReviews = collectDueReviewItems(activeBook, allowEarly);
-    if (dueReviews.length > 0) {
-      const questions = dueReviews.slice(0, 4);
-      if (typeof VoiceEngine.prewarm === "function") {
-        VoiceEngine.prewarm(questions.map((x) => x.word), state.settings.voice);
+    // 1. If user chose "weak" OR earlyReview is requested, launch spaced-repetition Quiz directly
+    if (activeBook === "weak" || allowEarly) {
+      const reviewPool = collectDueReviewItems(activeBook, true);
+      if (reviewPool.length > 0) {
+        launchQuizSession(reviewPool.slice(0, 5), activeBook, byBook.all, false);
+        return;
       }
-      state.quiz = {
-        mode: "quiz",
-        bookId: activeBook,
-        questions,
-        allPool: byBook.all,
-        index: 0,
-        correct: 0,
-        missed: [],
-        answered: false
-      };
-
       closeModals();
       toggleFloatingPanel("quiz", true);
-      HaruPet.performAction("excited");
-
-      if (isProactiveIdle) {
-        showBubble(
-          `Time for a quick spaced-repetition review! You have ${dueReviews.length} word(s) ready.`,
-          `有 ${dueReviews.length} 个学过的单词到期该复习啦，来巩固一下吧！`,
-          { badge: "间隔复习", speak: false }
-        );
-      }
-      renderQuizQuestion();
+      renderCaughtUpCard(activeBook);
       return;
     }
 
-    // 2. Priority 2: Teach Mode for untaught unseen words in Today's Daily Active Pool
-    let unseenToday = activeBook === "weak" ? [] : collectUnseenDailyItems(activeBook);
-    // If user explicitly switched to a specific book that has no unseen words in today's bag yet, unlock 3 on-demand
-    if (unseenToday.length === 0 && !isProactiveIdle && ["toefl", "blender", "antigravity"].includes(activeBook) && options.autoUnlockBook !== false) {
+    // 2. Check today's unseen words first -> 5-word batch Browse -> Immediate 5-question Quiz!
+    let unseenToday = collectUnseenDailyItems(activeBook);
+    if (unseenToday.length === 0 && ["toefl", "blender", "antigravity"].includes(activeBook) && options.autoUnlockBook !== false) {
       const st = getDailyProgressStats(activeBook);
       if (st.activeCount === 0) {
-        unlockExtraDailyWords(3, activeBook);
+        unlockExtraDailyWords(BATCH_SIZE, activeBook);
         unseenToday = collectUnseenDailyItems(activeBook);
       }
     }
 
     if (unseenToday.length > 0) {
+      const batch = unseenToday.slice(0, BATCH_SIZE);
+      const st = getDailyProgressStats("all");
+      const batchNum = Math.floor(st.taughtToday / BATCH_SIZE) + 1;
       if (typeof VoiceEngine.prewarm === "function") {
-        VoiceEngine.prewarm(unseenToday.slice(0, 4).map((x) => x.word), state.settings.voice);
+        VoiceEngine.prewarm(batch.map((x) => x.word), state.settings.voice);
       }
       state.quiz = {
         mode: "teach",
         bookId: activeBook,
-        teachQueue: unseenToday,
+        batchNum,
+        teachQueue: batch,
         index: 0
       };
-
       closeModals();
       toggleFloatingPanel("quiz", true);
       HaruPet.performAction("friendly");
-
-      if (isProactiveIdle) {
-        showBubble(
-          `Here is a new word from your daily bag! Let's learn it together first.`,
-          `Haru 来给你投喂今天的新词啦～先认一认，10 分钟后再抽查哦！`,
-          { badge: "每日喂词", speak: false }
-        );
-      }
       renderTeachCard();
       return;
     }
 
-    // 3. Priority 3: All caught up (today's bag taught & no reviews due yet)
+    // 3. Today's daily quota is done -> automatically enter Anti-Forgetting Review Mode
+    //    (ONLY previously learned learning/reviewing words, NEVER unseen words!)
+    const antiForgetPool = collectDueReviewItems(activeBook, false);
+    const fallbackLearned = antiForgetPool.length > 0 ? antiForgetPool : collectDueReviewItems(activeBook, true);
+    if (fallbackLearned.length > 0) {
+      launchQuizSession(fallbackLearned.slice(0, 5), activeBook, byBook.all, true);
+      return;
+    }
+
+    // 4. All caught up
     closeModals();
     toggleFloatingPanel("quiz", true);
     renderCaughtUpCard(activeBook);
+  }
+
+  function launchQuizSession(questions, activeBook, allPool, isAntiForget = false) {
+    if (typeof VoiceEngine.prewarm === "function") {
+      VoiceEngine.prewarm(questions.map((x) => x.word), state.settings.voice);
+    }
+    state.quiz = {
+      mode: "quiz",
+      isAntiForget,
+      bookId: activeBook,
+      questions: questions.map((x) => ({ ...x, _isRetry: false })),
+      initialCount: questions.length,
+      allPool,
+      index: 0,
+      correct: 0,
+      missed: [],
+      answered: false
+    };
+    closeModals();
+    toggleFloatingPanel("quiz", true);
+    HaruPet.performAction("excited");
+    renderQuizQuestion();
   }
 
   function renderTeachCard() {
@@ -2030,20 +2205,24 @@
     const prog = document.getElementById("quiz-progress-text");
     const titleEl = document.getElementById("quiz-card-title");
 
-    if (!q || q.index >= q.teachQueue.length) {
-      renderCaughtUpCard(q?.bookId || "all");
+    if (!q || !q.teachQueue || q.teachQueue.length === 0) {
+      startWordQuiz(false, false, q?.bookId || "all", { autoUnlockBook: false });
       return;
     }
+    if (q.index >= q.teachQueue.length) q.index = q.teachQueue.length - 1;
+    if (q.index < 0) q.index = 0;
 
     const cur = q.teachQueue[q.index];
-    const st = getDailyProgressStats("all");
+    const totalInBatch = q.teachQueue.length;
+    const isLast = q.index === totalInBatch - 1;
+    const isSoftwareBook = cur.bookId === "blender" || cur.bookId === "antigravity";
     const bookName = getBookDisplayName(cur.bookId);
 
     if (titleEl) titleEl.textContent = "Haru 每日喂词";
-    if (prog) prog.textContent = `今日进度 ${st.taughtToday} / ${st.goal} · ${bookName} · 新词认读`;
+    if (prog) prog.textContent = `第 ${q.batchNum || 1} 组 · ${q.index + 1} / ${totalInBatch} · ${bookName}`;
 
     const metaBadges = [];
-    if (cur.pos) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.pos)}</span>`);
+    if (!isSoftwareBook && cur.pos) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.pos)}</span>`);
     if (cur.category) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.category)}</span>`);
 
     body.innerHTML = `
@@ -2054,7 +2233,7 @@
             ${cur.shortcut ? `<kbd class="word-kbd" title="快捷键 / 命令">${escapeHtml(cur.shortcut)}</kbd>` : ""}
             <button id="teach-say-btn" class="icon-mini-btn" title="发音">${SPEAKER_SVG}</button>
           </div>
-          ${cur.phonetic ? `<div class="quiz-phonetic">${escapeHtml(cur.phonetic)}</div>` : ""}
+          ${!isSoftwareBook && cur.phonetic ? `<div class="quiz-phonetic">${escapeHtml(cur.phonetic)}</div>` : ""}
           ${cur.uiLocation ? `<div class="ui-loc-badge">📍 ${escapeHtml(cur.uiLocation)}</div>` : ""}
           ${metaBadges.length ? `<div class="quiz-meta-badges">${metaBadges.join("")}</div>` : ""}
           <div class="teach-meaning">${escapeHtml(cur.meaning)}</div>
@@ -2065,9 +2244,12 @@
             </div>
           ` : ""}
         </div>
-        <div class="teach-actions">
-          <button type="button" id="btn-teach-remember" class="teach-btn-remember">记住了（10分钟后考）</button>
-          <button type="button" id="btn-teach-master" class="teach-btn-master">本来就会</button>
+        <div class="teach-nav-row">
+          <button type="button" id="btn-teach-prev" class="teach-btn-prev" ${q.index === 0 ? "disabled" : ""}>← 上一个</button>
+          <button type="button" id="btn-teach-next" class="teach-btn-next">${isLast ? `立刻开考 (${totalInBatch}题)` : "下一个 →"}</button>
+        </div>
+        <div class="teach-skip-row">
+          <button type="button" id="btn-teach-skip-one" class="teach-btn-skip-one">太简单，跳过此词</button>
         </div>
       </div>
     `;
@@ -2075,27 +2257,43 @@
     document.getElementById("teach-say-btn").onclick = () => VoiceEngine.speak(cur.word, state.settings.voice);
     if (state.settings.autoSpeak) VoiceEngine.speak(cur.word, state.settings.voice);
 
-    document.getElementById("btn-teach-remember").onclick = () => {
-      markUserInteraction();
-      recordActiveStudySeconds(15);
-      const prev = getWordProgress(cur.word);
-      upsertWordProgress(cur, {
-        status: "learning",
-        seenCount: (prev?.seenCount || 0) + 1,
-        streak: 0,
-        nextReviewAt: Date.now() + SRS_TEN_MIN_MS,
-        lastReviewedAt: new Date().toISOString()
-      });
-      saveVocabProgress();
-      HaruPet.performAction("nod");
-      maybeCelebrateDailyGoal();
-      q.index++;
-      renderTeachCard();
+    document.getElementById("btn-teach-prev").onclick = () => {
+      if (q.index > 0) {
+        q.index--;
+        renderTeachCard();
+      }
     };
 
-    document.getElementById("btn-teach-master").onclick = () => {
+    document.getElementById("btn-teach-next").onclick = () => {
       markUserInteraction();
-      recordActiveStudySeconds(8);
+      recordActiveStudySeconds(10);
+      if (!isLast) {
+        q.index++;
+        renderTeachCard();
+      } else {
+        // Step 2: Mark all browsed words in this batch as learning (seenCount++) and IMMEDIATELY quiz them!
+        const nowIso = new Date().toISOString();
+        const quizItems = q.teachQueue.map((item) => {
+          const prev = getWordProgress(item.word);
+          upsertWordProgress(item, {
+            status: "learning",
+            seenCount: (prev?.seenCount || 0) + 1,
+            streak: 0,
+            nextReviewAt: Date.now(),
+            lastReviewedAt: nowIso
+          });
+          return { ...item, streak: 0, status: "learning" };
+        });
+        saveVocabProgress();
+        maybeCelebrateDailyGoal();
+        const { byBook } = buildAllEntriesIndex();
+        launchQuizSession(quizItems, q.bookId, byBook.all, false);
+      }
+    };
+
+    // Single-word skip ONLY (marks current word mastered & pulls 1 replacement if available; NO skip-all!)
+    document.getElementById("btn-teach-skip-one").onclick = () => {
+      markUserInteraction();
       const prev = getWordProgress(cur.word);
       upsertWordProgress(cur, {
         status: "mastered",
@@ -2105,9 +2303,20 @@
         lastReviewedAt: new Date().toISOString()
       });
       saveVocabProgress();
-      HaruPet.performAction("wink");
       maybeCelebrateDailyGoal();
-      q.index++;
+
+      const batchKeys = new Set(q.teachQueue.map((x) => x.word.toLowerCase()));
+      const replacement = collectUnseenDailyItems(q.bookId).find((x) => !batchKeys.has(x.word.toLowerCase()));
+      if (replacement) {
+        q.teachQueue[q.index] = replacement;
+        if (typeof VoiceEngine.prewarm === "function") {
+          VoiceEngine.prewarm([replacement.word], state.settings.voice);
+        }
+      } else {
+        q.teachQueue.splice(q.index, 1);
+        if (q.index >= q.teachQueue.length) q.index = Math.max(0, q.teachQueue.length - 1);
+      }
+      HaruPet.performAction("wink");
       renderTeachCard();
     };
 
@@ -2196,8 +2405,10 @@
       ? (streak === 0 ? "认按钮 · 英→中" : streak === 1 ? "找按钮 · 中→英" : (isShortcutStage ? "记键位 · 操作→键位" : "找按钮 · 终极巩固"))
       : (streak === 0 ? "第 1 阶 · 看英选义" : streak === 1 ? "第 2 阶 · 语境选词" : "第 3 阶 · 终极巩固");
 
-    if (titleEl) titleEl.textContent = isSoftwareBook ? "按钮与键位互考" : "间隔复习抽查";
-    if (prog) prog.textContent = `Question ${q.index + 1} / ${q.questions.length} · ${bookName}`;
+    if (titleEl) titleEl.textContent = q.isAntiForget
+      ? "旧词防遗忘抽查"
+      : (isSoftwareBook ? "按钮与键位互考" : "立刻开考");
+    if (prog) prog.textContent = `Question ${q.index + 1} / ${q.questions.length} · ${bookName}${cur._isRetry ? " · 错词巩固" : ""}`;
 
     const sameBook = q.allPool.filter(
       (x) => x.bookId === cur.bookId && x.word.toLowerCase() !== cur.word.toLowerCase()
@@ -2249,7 +2460,7 @@
     }
 
     const metaBadges = [`<span class="quiz-stage-pill">${stageLabel}</span>`];
-    if (cur.pos) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.pos)}</span>`);
+    if (!isSoftwareBook && cur.pos) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.pos)}</span>`);
     if (cur.category) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.category)}</span>`);
 
     const uiLocHtml = cur.uiLocation ? `<div class="ui-loc-badge">📍 ${escapeHtml(cur.uiLocation)}</div>` : "";
@@ -2261,7 +2472,7 @@
           ${cur.shortcut ? `<kbd class="word-kbd" title="快捷键 / 命令">${escapeHtml(cur.shortcut)}</kbd>` : ""}
           <button id="quiz-say-btn" class="icon-mini-btn" title="发音">${SPEAKER_SVG}</button>
         </div>
-        ${cur.phonetic ? `<div class="quiz-phonetic">${escapeHtml(cur.phonetic)}</div>` : ""}
+        ${!isSoftwareBook && cur.phonetic ? `<div class="quiz-phonetic">${escapeHtml(cur.phonetic)}</div>` : ""}
         ${uiLocHtml}
         <div class="quiz-meta-badges">${metaBadges.join("")}</div>
         ${cur.example ? `<div class="quiz-hint">"${escapeHtml(cur.example)}"</div>` : ""}
@@ -2377,14 +2588,18 @@
       saveVocabProgress();
       HaruPet.performAction("shake");
 
-      // Immediately show correct meaning & example feedback
+      // Immediately show correct meaning & example feedback + requeue once at end of this batch
+      const requeued = !cur._isRetry;
+      if (requeued) {
+        state.quiz.questions.push({ ...cur, streak: 0, _isRetry: true });
+      }
       const wrongBox = document.getElementById("quiz-wrong-box");
       if (wrongBox) {
         wrongBox.classList.remove("hidden");
         wrongBox.innerHTML = `
           <div><strong>${escapeHtml(cur.word)}</strong>${cur.shortcut ? ` <kbd class="word-kbd">${escapeHtml(cur.shortcut)}</kbd>` : ""} — ${escapeHtml(cur.meaning)}</div>
           ${cur.example ? `<div style="margin-top:4px;font-style:italic;color:var(--text-sub);">"${escapeHtml(cur.example)}"</div>` : ""}
-          <div style="margin-top:3px;font-size:11px;color:var(--accent);">已重置连对并安排 10 分钟后再次巩固</div>
+          <div style="margin-top:3px;font-size:11px;color:var(--accent);">${requeued ? "已记入生词本，将在本组末尾再巩固 1 次" : "已记入生词本并安排间隔复习"}</div>
         `;
       }
 
@@ -2994,13 +3209,14 @@
       tagsHtml.push(`<span class="word-cat-tag">错 ${item.wrongCount || 0} / 对 ${item.correctCount || 0}</span>`);
     }
 
+    const isSoftCard = bookId === "blender" || bookId === "antigravity";
     card.innerHTML = `
       <div class="word-card-body">
         <div class="word-main">
           <span>${escapeHtml(item.word)}</span>
           ${item.shortcut ? `<kbd class="word-kbd" title="快捷键 / 命令">${escapeHtml(item.shortcut)}</kbd>` : ""}
-          ${item.pos ? `<span class="word-pos-tag">${escapeHtml(item.pos)}</span>` : ""}
-          ${item.phonetic ? `<span class="phonetic">${escapeHtml(item.phonetic)}</span>` : ""}
+          ${!isSoftCard && item.pos ? `<span class="word-pos-tag">${escapeHtml(item.pos)}</span>` : ""}
+          ${!isSoftCard && item.phonetic ? `<span class="phonetic">${escapeHtml(item.phonetic)}</span>` : ""}
         </div>
         ${item.uiLocation ? `<div class="ui-loc-badge">📍 ${escapeHtml(item.uiLocation)}</div>` : ""}
         <div class="word-meta">${escapeHtml(item.meaning || "")}</div>

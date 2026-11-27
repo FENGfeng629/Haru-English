@@ -253,6 +253,7 @@ def _pack_rows(
         idx = len(out) + 1
         sc_fmt = _format_shortcut_spaces(shortcut)
         cat_clean = clean_str(category)
+        is_soft = book_id in ("blender", "antigravity")
         out.append(
             {
                 "id": f"{prefix}_{idx:04d}",
@@ -260,8 +261,8 @@ def _pack_rows(
                 "word": w,
                 "uiLocation": _default_ui_location(book_id, cat_clean, sc_fmt),
                 "shortcut": sc_fmt,
-                "phonetic": format_phonetic(phonetic),
-                "pos": clean_str(pos),
+                "phonetic": "" if is_soft else format_phonetic(phonetic),
+                "pos": "" if is_soft else clean_str(pos),
                 "meaning": clean_str(meaning),
                 "category": cat_clean,
                 "example": clean_str(example),
@@ -549,24 +550,29 @@ BLENDER_ROWS: list[tuple[str, str, str, str, str, str, str, str]] = [
 ]
 
 
-# Comprehensive Antigravity core terms grounded in https://antigravity.google/llms.txt (110+ entries)
+# Comprehensive Antigravity UI buttons, panels, Slash Commands & shortcuts (100+ entries, no brand fluff)
 ANTIGRAVITY_ROWS: list[tuple[str, str, str, str, str, str, str, str]] = [
-    # --- Products & Ecosystem ---
-    ("Antigravity IDE", "ˌæntiˈɡrævəti aɪ diː iː", "n.", "Antigravity 智能体开发环境（集成工作流、产物审查与编辑器的全功能 IDE）", "Products · 产品矩阵", "", "Open the repository in Antigravity IDE for interactive artifact review.", "在 Antigravity IDE 中打开代码仓库以体验交互式产物审查。"),
-    ("Antigravity App", "ˌæntiˈɡrævəti æp", "n.", "Antigravity 2.0 桌面指挥中心（可视化监控与调度多个后台智能体）", "Products · 产品矩阵", "", "Use Antigravity App to monitor parallel background agents from one command center.", "通过 Antigravity App 在同一指挥中心监控多个并行后台智能体。"),
-    ("Antigravity CLI", "ˌæntiˈɡrævəti siː el aɪ", "n.", "Antigravity 命令行界面（面向终端开发者的轻量级交互与脚本工具）", "Products · 产品矩阵", "agy", "Run agy in your terminal to launch an agentic session without leaving the shell.", "在终端运行 agy 即可不离开命令行直接启动智能体会话。"),
-    ("Antigravity SDK", "ˌæntiˈɡrævəti es diː keɪ", "n.", "Antigravity Python SDK（以代码编程方式定制智能体、工具、策略与 MCP）", "Products · 产品矩阵", "", "Use the Antigravity SDK to embed autonomous code-review agents into CI.", "使用 Antigravity SDK 将自动化代码审查智能体嵌入 CI 流程。"),
-    ("IDE Extensions", "aɪ diː iː ɪkˈstenʃnz", "n.", "官方 IDE 扩展（将 Antigravity 智能体原生接入 VS Code、JetBrains、Zed、Xcode 等）", "Products · 产品矩阵", "", "Install Antigravity IDE Extensions to bring agent workflows into VS Code or IntelliJ.", "安装官方 IDE 扩展即可在 VS Code 或 IntelliJ 中直接使用智能体工作流。"),
-    ("Agent Client Protocol", "ˈeɪdʒənt ˈklaɪənt ˈproʊtəkɒl", "n.", "智能体客户端协议 / ACP（将 Antigravity 接入其他第三方编辑器的开放协议）", "Products · 产品矩阵", "ACP", "Connect custom editors to Antigravity through the Agent Client Protocol (ACP).", "通过智能体客户端协议（ACP）将其他编辑器接入 Antigravity。"),
-    ("Workspace", "ˈwɜːrkspeɪs", "n.", "工作区（授权给智能体读写源码、搜索与执行构建的项目根目录）", "Core · 核心概念", "", "Keep all generated source files inside the active workspace directory.", "将所有生成的项目源码保存在当前活动工作区目录内。"),
-    ("Project", "ˈprɒdʒekt", "n.", "项目空间（在 Antigravity App 中组织关联仓库、会话与上下文的工作单元）", "Core · 核心概念", "", "Group related microservices under one Project in Antigravity App.", "在 Antigravity App 中将相关微服务归类到同一个项目下。"),
-    ("Remote Agents", "rɪˈmoʊt ˈeɪdʒənts", "n.", "远程智能体（运行在云端或远程开发机上的持久化自主代理）", "Core · 核心概念", "", "Dispatch long-running builds to Remote Agents while working on a lightweight laptop.", "在轻薄本上开发时，可将耗时构建委派给远程智能体执行。"),
-    ("Remote Control", "rɪˈmoʊt kənˈtroʊl", "n.", "远程控制（跨设备接管、查看与引导正在运行的智能体会话）", "Core · 核心概念", "", "Check progress and approve tool actions from afar with Remote Control.", "通过远程控制异地查看任务进度并审批工具操作。"),
-    ("SSH Connection", "es es eɪtʃ kəˈnekʃn", "n.", "SSH 远程连接（直接连接 Linux 服务器开展远程编码与调试）", "Core · 核心概念", "SSH", "Connect over SSH so the agent edits and tests directly on your build server.", "通过 SSH 连接远程服务器，让智能体直接在构建机上改码测试。"),
-    ("Authenticate", "ɔːˈθentɪkeɪt", "v.", "身份认证（登录 Google 账号或企业凭证以启用模型与云端能力）", "Core · 核心概念", "agy login", "Run agy login to authenticate your CLI session before invoking cloud models.", "调用云端模型前先运行 agy login 完成 CLI 身份认证。"),
-    ("AI Credits", "eɪ aɪ ˈkredɪts", "n.", "AI 额度（按模型调用与复杂推理消耗的平台计算配额）", "Core · 核心概念", "/credits", "Type /credits in the CLI to inspect remaining AI credits and burn rate.", "在 CLI 中输入 /credits 查看剩余 AI 额度与消耗情况。"),
-    ("Model Quota", "ˈmɒdl ˈkwoʊtə", "n.", "模型配额（不同前沿模型在当前周期内的可用速率与用量限额）", "Core · 核心概念", "/usage", "Check /usage to see model quotas across Gemini Pro and Flash tiers.", "输入 /usage 查看各档模型的当前可用配额。"),
-    ("Pay As You Go", "peɪ æz juː ɡoʊ", "n.", "按量计费（超出套餐基础配额后按实际消耗弹性计费模式）", "Core · 核心概念", "", "Enable Pay As You Go so overnight autonomous tasks never pause on quota limits.", "开启按量计费，避免夜间长程自动化任务因配额触顶中断。"),
+    # --- Core UI Panels, Modes & Action Buttons ---
+    ("Planning Mode", "", "", "规划模式（修改代码前先生成可审阅的实施计划）", "IDE · 核心模式", "/plan", "Switch to Planning Mode so the agent drafts an implementation plan before editing.", "切换至规划模式，让智能体在改代码前先拟定实施计划。"),
+    ("Auxiliary Pane", "", "", "辅助面板（右侧可折叠的智能体对话、产物与插件视图）", "IDE · 界面面板", "Ctrl + L", "Toggle the Auxiliary Pane to chat with the agent alongside your code.", "切换辅助面板，在代码旁随时与智能体对话或查看产物。"),
+    ("Files Changed", "", "", "变更文件列表（汇总当前任务全部新增、修改与删除的文件）", "IDE · 界面面板", "", "Click Files Changed at the bottom of the chat to inspect every edited file.", "点击对话底部的变更文件列表，逐一检查所有改动文件。"),
+    ("Inline Command", "", "", "行内指令框（在编辑器当前光标或选区原地唤起 AI 改写）", "IDE · 编辑器操作", "Ctrl + I", "Select a helper function and press Ctrl + I to open Inline Command.", "选中辅助函数并按 Ctrl + I 唤起行内指令框直接改写。"),
+    ("Visual Diff Overlays", "", "", "可视化差异浮层（在编辑器中直接高亮增删行并提供接受/拒绝按钮）", "IDE · 代码审查", "", "Inspect Visual Diff Overlays line by line before accepting edits.", "在编辑器中逐行查看可视化差异浮层后再决定是否采纳。"),
+    ("Accept All Changes", "", "", "全部接受按钮（一键采纳当前审查队列中的所有代码修改）", "IDE · 代码审查", "", "Click Accept All Changes once the build and tests pass.", "确认编译与测试全部通过后，点击「全部接受」采纳修改。"),
+    ("Reject Hunk", "", "", "拒绝此块按钮（撤销单个差异代码块的改动并保留其余修改）", "IDE · 代码审查", "", "Use Reject Hunk to discard an unintended formatting tweak.", "使用「拒绝此块」单独撤回不需要的格式改动。"),
+    ("Proceed", "", "", "继续执行按钮（审阅实施计划产物后批准智能体开始编码）", "Artifact · 产物审查", "", "Review the plan artifact and click Proceed to start implementation.", "审阅完实施计划产物后点击「继续」按钮启动编码。"),
+    ("Context Mentions", "", "", "上下文引用按钮（键入 @ 将指定文件、符号或目录挂载到提示词）", "IDE · 对话输入框", "@", "Type @ to trigger Context Mentions and attach StorageService.cs.", "输入 @ 触发上下文引用，精准挂载指定源码文件。"),
+    ("Voice Dictation", "", "", "语音听写按钮（在对话或 CLI 中直接口述英文/中文指令）", "IDE · 对话输入框", "/voice", "Enable Voice Dictation with /voice to speak refactor requests hands-free.", "用 /voice 开启语音听写，直接口述重构需求。"),
+    ("Agent Side Panel", "", "", "智能体侧边栏（停靠在编辑器一侧的主交互与任务面板）", "IDE · 界面面板", "Ctrl + L", "Open the Agent Side Panel to review running subagents and artifacts.", "打开智能体侧边栏查看运行中的子智能体与产物。"),
+    ("Overview Panel", "", "", "总览面板（集中展示蜂群目标、任务分组与验证截图时间线）", "IDE · 界面面板", "", "Switch to the Overview Panel to track all parallel swarm workers.", "切至总览面板一览全部并行蜂群任务进度。"),
+    ("Remote Agents", "", "", "远程智能体面板（派发并管理运行在云端/远程主机的持久任务）", "IDE · 界面面板", "", "Open Remote Agents to offload heavy builds to a cloud workspace.", "打开远程智能体面板，把耗时构建卸载到云端工作区。"),
+    ("Remote Control", "", "", "远程接管开关（跨设备查看实时进度并审批工具调用）", "IDE · 界面面板", "", "Use Remote Control to approve a deployment gate from another device.", "使用远程接管在其他设备上实时审批部署操作。"),
+    ("Connect over SSH", "", "", "SSH 远程连接入口（直连远端 Linux 主机进行智能体开发与调试）", "IDE · 界面面板", "SSH", "Use Connect over SSH to edit and compile directly on your Linux server.", "通过 SSH 远程连接直接在远端 Linux 服务器上改码编译。"),
+    ("Model Picker", "", "", "模型选择器（按任务复杂度切换 Gemini Pro / Flash 等推理模型）", "IDE · 对话输入框", "", "Use the Model Picker to switch to a lighter model for quick lookups.", "通过模型选择器为简单查询切换更轻快的模型。"),
+    ("AI Credits", "", "", "AI 额度指示器（查看当前周期剩余计算额度与消耗速率）", "CLI · 状态命令", "/credits", "Run /credits to inspect remaining AI Credits in the CLI.", "运行 /credits 查看当前剩余的 AI 额度。"),
+    ("Model Quotas", "", "", "模型配额面板（查看各档模型当前的速率限制与可用余量）", "CLI · 状态命令", "/usage", "Type /usage to inspect current Model Quotas across tiers.", "输入 /usage 查看各档模型的当前可用配额。"),
+    ("Open Workspace", "", "", "打开工作区（指定授权给智能体读写与运行命令的项目根目录）", "IDE · 文件菜单", "", "Use Open Workspace so the agent scopes all edits to your project root.", "打开工作区，使智能体将所有读写操作限定在项目根目录内。"),
+    ("Agent Client Protocol", "", "", "智能体客户端协议（将 Antigravity 接入第三方编辑器的标准开关）", "IDE · 扩展集成", "ACP", "Enable Agent Client Protocol (ACP) to connect external editors.", "启用智能体客户端协议（ACP）以对接其他编辑器。"),
 
     # --- Agentic Architecture & Artifacts ---
     ("Agent", "ˈeɪdʒənt", "n.", "智能体（具备自主规划、工具调用、代码读写与验证能力的 AI 执行者）", "Agent · 智能体架构", "", "Ask the agent to diagnose the race condition and verify the fix with tests.", "让智能体定位并发竞态问题并通过测试验证修复结果。"),

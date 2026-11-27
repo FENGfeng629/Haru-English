@@ -77,6 +77,19 @@
         <div id="bubble-extra" class="bubble-extra hidden"></div>
       </div>
 
+      <!-- Compact Frosted Mini Idle Bubble (Non-intrusive, auto-fades in 6s, 2h snooze button) -->
+      <div id="mini-idle-bubble" class="mini-idle-bubble hidden hit-zone" role="status">
+        <div id="mini-idle-content" class="mini-idle-content" title="点击展开详情或作答"></div>
+        <div class="mini-idle-actions">
+          <button type="button" id="btn-mini-snooze" class="mini-idle-icon-btn" title="2小时内勿扰">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+          </button>
+          <button type="button" id="btn-mini-close" class="mini-idle-icon-btn" title="关闭">
+            <svg viewBox="0 0 12 12" width="9" height="9"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+
       <!-- Actions & Expressions English Panel (Unified Clash Verge Style) -->
       <div id="actions-panel" class="floating-card actions-panel hidden hit-zone">
         <div class="card-header">
@@ -494,11 +507,12 @@
                 </div>
               </div>
               <div class="bento-body">
-                <div class="bento-sub-label">每日新词目标（自动按词频解锁）</div>
-                <div class="seg-pills seg-3" role="group" aria-label="每日新词目标">
-                  <button type="button" class="seg-pill" data-daily-goal="5">5 词 / 天</button>
-                  <button type="button" class="seg-pill active" data-daily-goal="10">10 词 / 天</button>
-                  <button type="button" class="seg-pill" data-daily-goal="20">20 词 / 天</button>
+                <div class="bento-sub-label">每日新词目标（每 5 词为一组，先浏览后立刻开考）</div>
+                <div class="seg-pills seg-4" role="group" aria-label="每日新词目标">
+                  <button type="button" class="seg-pill" data-daily-goal="5">5 词</button>
+                  <button type="button" class="seg-pill active" data-daily-goal="10">10 词</button>
+                  <button type="button" class="seg-pill" data-daily-goal="15">15 词</button>
+                  <button type="button" class="seg-pill" data-daily-goal="20">20 词</button>
                 </div>
 
                 <div class="bento-sub-label">学习焦点配比</div>

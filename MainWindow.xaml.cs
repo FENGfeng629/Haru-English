@@ -20,7 +20,10 @@ namespace HaruEnglishPet;
 
 public partial class MainWindow : Window
 {
+    private const int GWL_STYLE = -16;
     private const int GWL_EXSTYLE = -20;
+    private const long WS_CAPTION = 0x00C00000;
+    private static readonly IntPtr HWND_TOPMOST = new(-1);
     private const int WS_EX_TRANSPARENT = 0x00000020;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
     private const int WS_EX_LAYERED = 0x00080000;
@@ -75,8 +78,18 @@ public partial class MainWindow : Window
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
     private static extern IntPtr SetWindowLongPtr64(IntPtr hwnd, int index, IntPtr newStyle);
 
+    private static long GetWindowStyle(IntPtr hwnd) =>
+        IntPtr.Size == 8 ? GetWindowLongPtr64(hwnd, GWL_STYLE).ToInt64() : GetWindowLong32(hwnd, GWL_STYLE);
+
     private static long GetWindowExStyle(IntPtr hwnd) =>
         IntPtr.Size == 8 ? GetWindowLongPtr64(hwnd, GWL_EXSTYLE).ToInt64() : GetWindowLong32(hwnd, GWL_EXSTYLE);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsZoomed(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
     private static void SetWindowExStyle(IntPtr hwnd, long style)
     {
@@ -169,6 +182,8 @@ public partial class MainWindow : Window
     private bool _fullscreenDndEnabled = true;
     private bool _hiddenByFullscreen = false;
     private bool _isFullscreenActive = false;
+    private int _fullscreenConfirmCount = 0;
+    private int _visibilitySeq = 0;
     private List<HitRect> _hitRects = new();
     private readonly object _rectLock = new();
     private readonly object _ttsLock = new();
@@ -355,6 +370,7 @@ public partial class MainWindow : Window
     {
         if (!_fullscreenDndEnabled)
         {
+            _fullscreenConfirmCount = 0;
             if (_hiddenByFullscreen)
             {
                 _hiddenByFullscreen = false;
@@ -366,7 +382,27 @@ public partial class MainWindow : Window
         }
 
         bool fullNow = IsAnotherAppFullscreen();
-        if (fullNow == _isFullscreenActive) return;
+        if (fullNow)
+        {
+            // Require 2 consecutive detections before hiding so transient focus shifts / app clicks never flicker-hide Haru
+            _fullscreenConfirmCount++;
+            if (_fullscreenConfirmCount < 2) return;
+        }
+        else
+        {
+            _fullscreenConfirmCount = 0;
+        }
+
+        if (fullNow == _isFullscreenActive)
+        {
+            // While visible & not fullscreen, periodically reinforce Topmost if another app tried to cover our toolwindow
+            if (!fullNow && _petVisible && Topmost && _hwnd != IntPtr.Zero && IsVisible)
+            {
+                SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+            return;
+        }
+
         _isFullscreenActive = fullNow;
         PostToWeb(new JsonObject { ["type"] = "fullscreenDnd", ["active"] = fullNow });
 
@@ -386,32 +422,54 @@ public partial class MainWindow : Window
     {
         try
         {
-            // QUNS_BUSY = 2, QUNS_RUNNING_D3D_FULL_SCREEN = 3, QUNS_PRESENTATION_MODE = 4
-            if (SHQueryUserNotificationState(out int state) == 0 && (state == 2 || state == 3 || state == 4))
-            {
-                return true;
-            }
-
             IntPtr fg = GetForegroundWindow();
             if (fg == IntPtr.Zero || fg == _hwnd) return false;
             if (_freezeOverlay != null && new WindowInteropHelper(_freezeOverlay).Handle == fg) return false;
             if (_settingsWindow != null && _settingsWindow.WindowHandle == fg) return false;
 
+            // Never treat our own process windows (WebView2 child / Settings / dialogs) as fullscreen
+            GetWindowThreadProcessId(fg, out uint fgPid);
+            if (fgPid == (uint)Environment.ProcessId) return false;
+
             var cls = new System.Text.StringBuilder(64);
             GetClassName(fg, cls, cls.Capacity);
             var clsName = cls.ToString();
-            if (clsName is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
+            if (clsName is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd"
+                or "NotifyIconOverflowWindow" or "TaskListThumbnailWnd" or "Windows.UI.Core.CoreWindow")
                 return false;
+
+            // Only trust true D3D exclusive fullscreen (3) or presentation mode (4).
+            // Do NOT treat QUNS_BUSY (2) as fullscreen because normal apps/launchers trigger it!
+            if (SHQueryUserNotificationState(out int state) == 0 && (state == 3 || state == 4))
+            {
+                return true;
+            }
 
             if (GetWindowRect(fg, out var r))
             {
-                var screen = Forms.Screen.FromHandle(fg).Bounds;
-                bool coversScreen =
-                    r.Left <= screen.Left + 2 &&
-                    r.Top <= screen.Top + 2 &&
-                    r.Right >= screen.Right - 2 &&
-                    r.Bottom >= screen.Bottom - 2;
-                return coversScreen;
+                var scr = Forms.Screen.FromHandle(fg);
+                var bounds = scr.Bounds;
+                var work = scr.WorkingArea;
+                long style = GetWindowStyle(fg);
+                bool hasCaption = (style & WS_CAPTION) == WS_CAPTION;
+
+                // A normal maximized desktop app (browser, IDE, Explorer, chat app) is NOT a fullscreen game/video!
+                if (IsZoomed(fg) && hasCaption)
+                    return false;
+
+                bool coversFullMonitor =
+                    r.Left <= bounds.Left + 1 &&
+                    r.Top <= bounds.Top + 1 &&
+                    r.Right >= bounds.Right - 1 &&
+                    r.Bottom >= bounds.Bottom - 1;
+
+                if (!coversFullMonitor) return false;
+
+                // Must either be borderless (no title bar) OR genuinely cover the taskbar area
+                bool taskbarExists = bounds.Height > work.Height || bounds.Width > work.Width;
+                if (!hasCaption) return true;
+                if (taskbarExists && r.Bottom >= bounds.Bottom - 1 && work.Bottom < bounds.Bottom)
+                    return true;
             }
         }
         catch { }
@@ -695,25 +753,30 @@ public partial class MainWindow : Window
         bool maskTransition = token > 0 && originMoved && (sizeChanged || targetLeft < Left - 4 || targetTop < Top - 4);
         if (maskTransition)
         {
-            _boundsRevealToken = token;
-            _pendingBounds = (targetLeft, targetTop, targetW, targetH, token);
-            BeginAnimation(OpacityProperty, null);
-
             bool froze = _petVisible && freezeRect.HasValue && TryShowFreezeOverlay(freezeRect.Value);
             if (froze)
             {
+                _boundsRevealToken = token;
+                _pendingBounds = (targetLeft, targetTop, targetW, targetH, token);
+                BeginAnimation(OpacityProperty, null);
                 _maskStage = BoundsMaskStage.WaitingOverlayPaint;
                 _pendingBoundsTicks = 1;
+                StartRevealFallbackTimer();
+                HookMaskCompositionTick();
+                return;
             }
-            else
+            // Never blank Opacity = 0 without a freeze overlay — apply bounds directly so clicking Haru never flashes invisible!
+            ApplyWindowBoundsDirect(targetLeft, targetTop, targetW, targetH);
+            if (Opacity < 1)
             {
-                Opacity = 0;
-                _maskStage = BoundsMaskStage.WaitingWindowHide;
-                _pendingBoundsTicks = 2;
+                BeginAnimation(OpacityProperty, null);
+                Opacity = 1;
             }
-
-            StartRevealFallbackTimer();
-            HookMaskCompositionTick();
+            PostToWeb(new JsonObject
+            {
+                ["type"] = "windowBoundsApplied",
+                ["token"] = token
+            });
             return;
         }
 
@@ -1931,6 +1994,7 @@ public partial class MainWindow : Window
 
     private void SetPetVisibility(bool visible)
     {
+        int seq = ++_visibilitySeq;
         _petVisible = visible;
         _restoreFadeTimer?.Stop();
         HideFreezeOverlay();
@@ -1943,6 +2007,10 @@ public partial class MainWindow : Window
             BeginAnimation(OpacityProperty, null);
             Opacity = 0;
             Show();
+            if (Topmost && _hwnd != IntPtr.Zero)
+            {
+                SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
             UpdateClickThroughFromCursor(force: true);
             PostToWeb(new JsonObject { ["type"] = "petRestored" });
 
@@ -1954,14 +2022,14 @@ public partial class MainWindow : Window
             {
                 _restoreFadeTimer.Tick -= onTick;
                 _restoreFadeTimer.Stop();
-                if (!_petVisible) return;
-                var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(260))
+                if (seq != _visibilitySeq || !_petVisible) return;
+                var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220))
                 {
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
                 };
                 fadeIn.Completed += (_, _) =>
                 {
-                    if (_petVisible)
+                    if (seq == _visibilitySeq && _petVisible)
                     {
                         BeginAnimation(OpacityProperty, null);
                         Opacity = 1;
@@ -1976,13 +2044,13 @@ public partial class MainWindow : Window
         {
             if (_toggleShowMenuItem != null) _toggleShowMenuItem.Text = "👁️ 显示桌宠 (Show Pet)";
             if (!IsVisible) return;
-            var fadeOut = new DoubleAnimation(Opacity, 0, TimeSpan.FromMilliseconds(170))
+            var fadeOut = new DoubleAnimation(Opacity, 0, TimeSpan.FromMilliseconds(160))
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
             };
             fadeOut.Completed += (_, _) =>
             {
-                if (!_petVisible)
+                if (seq == _visibilitySeq && !_petVisible)
                 {
                     Hide();
                     BeginAnimation(OpacityProperty, null);

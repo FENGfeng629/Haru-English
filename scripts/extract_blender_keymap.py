@@ -192,7 +192,7 @@ def run_inside_blender() -> int:
                 "uiLocation": ui_loc,
                 "shortcut": shortcut,
                 "phonetic": "",
-                "pos": "v./n.",
+                "pos": "",
                 "meaning": zh_name,
                 "category": category,
                 "example": desc_en if desc_en else f"Press {shortcut} in {ui_loc.split('·')[0].strip()} to run {en_name}.",

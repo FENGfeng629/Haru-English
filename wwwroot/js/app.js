@@ -237,10 +237,14 @@
         const modelChanged = (prevSettings.modelUrl || "") !== (next.modelUrl || "");
         const voiceChanged = JSON.stringify(prevSettings.voice || {}) !== JSON.stringify(next.voice || {});
         const posReset = next.petX < 0 && next.petY < 0;
+        const quizPackChanged = (prevSettings.quizPackId || "all") !== (next.quizPackId || "all");
         state.settings = next;
         applyAppearance(next.uiTheme, next.uiBorderColor);
         updateChatHeaderBadges();
         syncQuizBookButtons(next.quizPackId);
+        if (quizPackChanged && state.activePanel === "quiz") {
+          startWordQuiz(next.quizPackId === "weak", false, next.quizPackId || "all");
+        }
         if (posReset) {
           initPetPosition();
         } else if (scaleChanged) {
@@ -377,6 +381,7 @@
       englishLevel: "B1",
       quizPackId: "all",
       dailyNewWordsGoal: 10,
+      dailyFocusBooks: ["toefl", "blender"],
       dailyFocusRatio: "single_book",
       modelUrl: "models/haru/haru_greeter_t03.model3.json",
       alwaysOnTop: true,
@@ -1177,7 +1182,8 @@
     document.getElementById("dock-quiz-btn")?.addEventListener("click", () => {
       markUserInteraction();
       if (state.activePanel === "quiz") return;
-      startWordQuiz(false);
+      const defaultBook = state.settings?.quizPackId || "all";
+      startWordQuiz(defaultBook === "weak", false, defaultBook);
     });
 
     document.querySelectorAll("[data-close]").forEach((btn) => {
@@ -1645,31 +1651,42 @@
     return next;
   }
 
-  function computeDailyTargets(goal, ratio, activeBook) {
-    if (ratio === "single_book" && ["toefl", "blender", "antigravity"].includes(activeBook)) {
-      return {
-        toefl: activeBook === "toefl" ? goal : 0,
-        blender: activeBook === "blender" ? goal : 0,
-        antigravity: activeBook === "antigravity" ? goal : 0
-      };
+  function getActiveFocusBooks() {
+    const validIds = ["toefl", "blender", "antigravity"];
+    const raw = state.settings?.dailyFocusBooks;
+    if (Array.isArray(raw) && raw.length > 0) {
+      const cleaned = raw.filter((id) => validIds.includes(id));
+      if (cleaned.length > 0) return [...new Set(cleaned)];
     }
-    if (ratio === "toefl_heavy") {
-      const bl = Math.max(1, Math.round(goal * 0.1));
-      const ag = Math.max(1, Math.round(goal * 0.1));
-      return { toefl: Math.max(0, goal - bl - ag), blender: bl, antigravity: ag };
-    }
-    if (ratio === "software_heavy") {
-      const bl = Math.max(1, Math.round(goal * 0.3));
-      const ag = Math.max(1, Math.round(goal * 0.3));
-      return { toefl: Math.max(0, goal - bl - ag), blender: bl, antigravity: ag };
-    }
-    // balanced (default): TOEFL majority + Blender & Antigravity guaranteed floor (e.g. 10 -> 6 + 2 + 2)
-    const swEach = goal <= 5 ? 1 : goal >= 20 ? 4 : 2;
-    return {
-      toefl: Math.max(0, goal - swEach * 2),
-      blender: swEach,
-      antigravity: swEach
-    };
+    return ["toefl", "blender"];
+  }
+
+  function computeDailyTargets(goal, _ratio, activeBook) {
+    // If user explicitly set a single default quiz pack, honor it; otherwise equal-split across checked dailyFocusBooks!
+    const checked = getActiveFocusBooks();
+    const books = (activeBook && ["toefl", "blender", "antigravity"].includes(activeBook))
+      ? [activeBook]
+      : checked;
+    const targets = { toefl: 0, blender: 0, antigravity: 0 };
+    if (!books.length) return targets;
+    const base = Math.floor(goal / books.length);
+    let rem = goal - base * books.length;
+    books.forEach((b) => {
+      targets[b] = base + (rem > 0 ? 1 : 0);
+      if (rem > 0) rem--;
+    });
+    return targets;
+  }
+
+  function rebuildUntaughtDailyQueue() {
+    const vp = state.vocabProgress;
+    if (!vp) return;
+    // Keep words already taught today, drop still-unseen ones so newly checked modules take effect immediately
+    vp.dailyQueue = (vp.dailyQueue || []).filter((k) => {
+      const p = vp.items?.[k];
+      return p && p.status !== "unseen";
+    });
+    ensureDailyActivePool(true);
   }
 
   function ensureDailyActivePool(shouldPersist = true) {
@@ -2090,11 +2107,16 @@
   function collectUnseenDailyItems(activeBook) {
     const { map } = buildAllEntriesIndex();
     const vp = state.vocabProgress;
+    const focusSet = new Set(getActiveFocusBooks());
     const list = [];
     for (const k of vp.dailyQueue || []) {
       const entry = map.get(k);
       if (!entry) continue;
-      if (activeBook !== "all" && activeBook !== "weak" && entry.bookId !== activeBook) continue;
+      if (activeBook === "all") {
+        if (focusSet.size > 0 && !focusSet.has(entry.bookId)) continue;
+      } else if (activeBook !== "weak" && entry.bookId !== activeBook) {
+        continue;
+      }
       const prog = vp.items[k];
       if (!prog || prog.status === "unseen") {
         list.push(entry);
@@ -2869,7 +2891,9 @@
     });
     document.getElementById("weak-filter")?.addEventListener("change", () => renderWeakWordsList());
     document.getElementById("btn-quiz-weak")?.addEventListener("click", () => {
-      const targetBook = vocabView.book === "daily" ? "all" : (vocabView.book || "all");
+      const targetBook = vocabView.book === "daily"
+        ? (state.settings?.quizPackId || "all")
+        : (vocabView.book || state.settings?.quizPackId || "all");
       if (IS_SETTINGS_VIEW) HostBridge.startQuizBook(targetBook);
       else startWordQuiz(targetBook === "weak", false, targetBook);
     });
@@ -3920,17 +3944,33 @@
         const goal = Number(btn.dataset.dailyGoal) || 10;
         state.settings.dailyNewWordsGoal = goal;
         document.querySelectorAll("[data-daily-goal]").forEach((b) => b.classList.toggle("active", b === btn));
-        ensureDailyActivePool(true);
+        rebuildUntaughtDailyQueue();
         renderWeakWordsList();
         autoSaveSettings();
       });
     });
 
-    document.getElementById("set-daily-ratio")?.addEventListener("change", (e) => {
-      state.settings.dailyFocusRatio = e.target.value || "balanced";
-      ensureDailyActivePool(true);
-      renderWeakWordsList();
-      autoSaveSettings();
+    document.querySelectorAll("[data-focus-book]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const selected = Array.from(document.querySelectorAll("[data-focus-book]"))
+          .filter((el) => el.checked)
+          .map((el) => el.dataset.focusBook);
+        // Keep at least 1 module checked
+        if (selected.length === 0) {
+          cb.checked = true;
+          return;
+        }
+        state.settings.dailyFocusBooks = selected;
+        // Sync default Quiz pack: 1 checked => that exact book; 2+ checked => "all" (equal split across checked books)
+        const nextPack = selected.length === 1 ? selected[0] : "all";
+        state.settings.quizPackId = nextPack;
+        const quizPackSel = document.getElementById("set-quiz-pack");
+        if (quizPackSel) quizPackSel.value = nextPack;
+        renderDailyFocusBooksUI();
+        rebuildUntaughtDailyQueue();
+        renderWeakWordsList();
+        autoSaveSettings();
+      });
     });
 
     document.querySelectorAll("[data-activity]").forEach((btn) => {
@@ -3946,7 +3986,14 @@
     });
 
     document.getElementById("set-quiz-pack")?.addEventListener("change", (e) => {
-      state.settings.quizPackId = e.target.value || "all";
+      const next = e.target.value || "all";
+      state.settings.quizPackId = next;
+      if (["toefl", "blender", "antigravity"].includes(next)) {
+        state.settings.dailyFocusBooks = [next];
+        renderDailyFocusBooksUI();
+      }
+      rebuildUntaughtDailyQueue();
+      renderWeakWordsList();
       autoSaveSettings();
     });
 
@@ -4249,6 +4296,27 @@
     document.getElementById("row-whisper-model")?.classList.toggle("hidden", stt === "webspeech");
   }
 
+  function renderDailyFocusBooksUI() {
+    const active = getActiveFocusBooks();
+    const count = active.length || 1;
+    const basePct = Math.floor(100 / count);
+    let rem = 100 - basePct * count;
+    const pctMap = {};
+    active.forEach((id) => {
+      pctMap[id] = basePct + (rem > 0 ? 1 : 0);
+      if (rem > 0) rem--;
+    });
+    ["toefl", "blender", "antigravity"].forEach((id) => {
+      const checked = active.includes(id);
+      const cb = document.querySelector(`[data-focus-book="${id}"]`);
+      const card = document.querySelector(`[data-focus-book-card="${id}"]`);
+      const pctEl = document.querySelector(`[data-focus-pct="${id}"]`);
+      if (cb) cb.checked = checked;
+      if (card) card.classList.toggle("checked", checked);
+      if (pctEl) pctEl.textContent = checked ? `${pctMap[id]}%` : "0%";
+    });
+  }
+
   function populateSettingsForm() {
     const s = state.settings;
     if (!s.hotkeys) s.hotkeys = { talk: "Alt+T", quiz: "Alt+Q", togglePet: "Alt+H" };
@@ -4299,8 +4367,7 @@
     document.querySelectorAll("[data-daily-goal]").forEach((b) => {
       b.classList.toggle("active", Number(b.dataset.dailyGoal) === dailyGoal);
     });
-    const ratioSel = document.getElementById("set-daily-ratio");
-    if (ratioSel) ratioSel.value = s.dailyFocusRatio || "balanced";
+    renderDailyFocusBooksUI();
 
     const effectiveAct = !s.enableIdleQuiz ? "off" : (s.activityLevel === "super" ? "lively" : (s.activityLevel || "normal"));
     document.querySelectorAll("[data-activity]").forEach((b) => {

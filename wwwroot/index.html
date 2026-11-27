@@ -515,13 +515,24 @@
                   <button type="button" class="seg-pill" data-daily-goal="20">20 词</button>
                 </div>
 
-                <div class="bento-sub-label">学习焦点配比</div>
-                <select id="set-daily-ratio" class="s-select">
-                  <option value="single_book">专注当前抽查词库（默认）</option>
-                  <option value="balanced">均衡配比（托福为主 + Blender/Antigravity 保底）</option>
-                  <option value="toefl_heavy">托福冲刺（托福 80% + 软件保底 2 词）</option>
-                  <option value="software_heavy">软件实战（Blender + Antigravity 60% + 托福 40%）</option>
-                </select>
+                <div class="bento-sub-label">每日抽查模块配比（勾选模块自动均分占比，如勾 2 项各占 50%）</div>
+                <div id="daily-books-checklist" class="daily-books-checklist" role="group" aria-label="每日抽查模块勾选">
+                  <label class="daily-book-check" data-focus-book-card="toefl">
+                    <input type="checkbox" data-focus-book="toefl" checked />
+                    <span class="daily-book-check-name">托福 TOEFL</span>
+                    <span class="daily-book-pct" data-focus-pct="toefl">50%</span>
+                  </label>
+                  <label class="daily-book-check" data-focus-book-card="blender">
+                    <input type="checkbox" data-focus-book="blender" checked />
+                    <span class="daily-book-check-name">Blender 3D</span>
+                    <span class="daily-book-pct" data-focus-pct="blender">50%</span>
+                  </label>
+                  <label class="daily-book-check" data-focus-book-card="antigravity">
+                    <input type="checkbox" data-focus-book="antigravity" />
+                    <span class="daily-book-check-name">Antigravity</span>
+                    <span class="daily-book-pct" data-focus-pct="antigravity">0%</span>
+                  </label>
+                </div>
 
                 <div class="bento-sub-label">待机喂词 / 抽查频率</div>
                 <div class="seg-pills seg-4" role="group" aria-label="待机抽查频率">

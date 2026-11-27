@@ -12,9 +12,11 @@ public class AppSettings
     public string EnglishLevel { get; set; } = "B1";
     // all | weak | toefl | blender | antigravity | <knowledgePackId>
     public string QuizPackId { get; set; } = "all";
-    // Daily Active Pool settings: 5 | 10 | 20
+    // Daily Active Pool settings: 5 | 10 | 15 | 20
     public int DailyNewWordsGoal { get; set; } = 10;
-    // single_book | balanced | toefl_heavy | software_heavy
+    // Checked vocab modules for daily equal-split pool (e.g. ["toefl","blender"] => 50% each)
+    public List<string> DailyFocusBooks { get; set; } = new() { "toefl", "blender" };
+    // Legacy ratio retained for backward compatibility
     public string DailyFocusRatio { get; set; } = "single_book";
     public string ModelUrl { get; set; } = "models/haru/haru_greeter_t03.model3.json";
     public bool AlwaysOnTop { get; set; } = true;

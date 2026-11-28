@@ -3853,8 +3853,19 @@ body[data-theme="dark"] .word-book-tag.dev_compiler {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   overflow-y: auto;
+}
+
+.quiz-caughtup-box,
+.quiz-summary {
+  margin: auto 0;
+}
+
+.quiz-opt-btn {
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .dock-progress-badge {

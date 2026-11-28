@@ -2900,7 +2900,6 @@
         ${uiLocHtml}
         <div class="teach-meaning" style="display:inline-flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap;">
           <span>${escapeHtml(cur.meaning)}</span>
-          <button id="quiz-say-btn" class="icon-mini-btn" title="听音提示">${SPEAKER_SVG}</button>
         </div>
         ${cloze ? `<div class="quiz-hint">"${cloze}"</div>` : (isSoftwareBook ? `<div class="quiz-hint">请选择对应的英文界面按钮名：</div>` : "")}
       `;
@@ -2911,10 +2910,14 @@
       <div class="quiz-options"></div>
       <div id="quiz-wrong-box" class="quiz-wrong-feedback hidden"></div>
     `;
+    body.scrollTop = 0;
 
     const sayBtn = document.getElementById("quiz-say-btn");
     if (sayBtn) sayBtn.onclick = () => VoiceEngine.speak(cur.word, state.settings.voice);
-    if (state.settings.autoSpeak) VoiceEngine.speak(cur.word, state.settings.voice);
+    // Never auto-speak the English answer during zh2en (choose-English) questions so it doesn't spoil the answer!
+    if (state.settings.autoSpeak && stageType !== "zh2en") {
+      VoiceEngine.speak(cur.word, state.settings.voice);
+    }
 
     const optWrap = body.querySelector(".quiz-options");
     options.forEach((optText) => {
@@ -2941,6 +2944,10 @@
 
     const now = Date.now();
     const prev = getWordProgress(cur.word);
+    // In zh2en mode, pronounce the answer AFTER the user picks an option to reinforce listening without spoiling
+    if (state.settings.autoSpeak && (cur.streak || 0) >= 1 && !(cur.bookId !== "toefl" && (cur.streak || 0) >= 2 && cur.shortcut)) {
+      VoiceEngine.speak(cur.word, state.settings.voice);
+    }
 
     if (isCorrect) {
       state.quiz.correct++;

@@ -2151,11 +2151,92 @@
     });
   }
 
-  function syncQuizBookButtons(activeBook) {
+  function syncQuizBookButtons(activeBook, animateSlide = true) {
     const target = activeBook || state.settings?.quizPackId || "all";
-    document.querySelectorAll("[data-quiz-book]").forEach((btn) => {
+    const container = document.querySelector(".quiz-book-pills");
+    const buttons = container ? Array.from(container.querySelectorAll("[data-quiz-book]")) : [];
+    const targetBtn = buttons.find((btn) => btn.dataset.quizBook === target);
+
+    // FLIP animation: smoothly slide the selected book capsule to the 1st position!
+    if (container && targetBtn && !targetBtn.classList.contains("hidden") && container.firstElementChild !== targetBtn) {
+      const visibleBtns = buttons.filter((b) => !b.classList.contains("hidden"));
+      const canAnimate = animateSlide && visibleBtns.length > 1 && container.offsetParent !== null;
+      const beforeLeft = new Map();
+      if (canAnimate) {
+        visibleBtns.forEach((b) => beforeLeft.set(b, b.getBoundingClientRect().left));
+      }
+
+      container.prepend(targetBtn);
+
+      if (canAnimate) {
+        visibleBtns.forEach((b) => {
+          const oldLeft = beforeLeft.get(b);
+          const newLeft = b.getBoundingClientRect().left;
+          const dx = oldLeft - newLeft;
+          if (Math.abs(dx) > 0.5) {
+            b.style.transition = "none";
+            b.style.transform = `translateX(${dx}px)`;
+          }
+        });
+        // Force reflow then play smooth spring slide
+        void container.offsetWidth;
+        visibleBtns.forEach((b) => {
+          b.style.transition = "transform 0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+          b.style.transform = "translateX(0)";
+        });
+        setTimeout(() => {
+          visibleBtns.forEach((b) => {
+            b.style.transition = "";
+            b.style.transform = "";
+          });
+        }, 360);
+      }
+    }
+
+    buttons.forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.quizBook === target);
     });
+  }
+
+  function animateQuizBodyTransition() {
+    const body = document.getElementById("quiz-body");
+    if (!body) return;
+    body.classList.remove("quiz-body-enter");
+    void body.offsetWidth;
+    body.classList.add("quiz-body-enter");
+  }
+
+  function setHeaderRestudyVisible(visible) {
+    document.getElementById("btn-header-restudy")?.classList.toggle("hidden", !visible);
+  }
+
+  function triggerRestudyCurrentBatch() {
+    const q = state.quiz;
+    if (!q || q.mode !== "quiz" || !q.questions?.length) return;
+    markUserInteraction();
+    VoiceEngine.stopSpeaking();
+    const seen = new Set();
+    const batch = [];
+    q.questions.forEach((item) => {
+      const k = (item.word || "").toLowerCase();
+      if (!k || seen.has(k)) return;
+      seen.add(k);
+      batch.push(item);
+    });
+    if (!batch.length) return;
+    state.quiz = {
+      mode: "teach",
+      isRestudy: true,
+      resumeAntiForget: !!q.isAntiForget,
+      resumeWarmup: !!q.isWarmup,
+      resumeDedicatedReview: !!q.isDedicatedReview,
+      bookId: q.bookId,
+      batchNum: 1,
+      teachQueue: batch,
+      index: 0
+    };
+    HaruPet.performAction("friendly");
+    renderTeachCard();
   }
 
   // ==================== MINI IDLE BUBBLE (NON-INTRUSIVE, 6s AUTO-FADE, 2H SNOOZE) ====================
@@ -2282,6 +2363,8 @@
   }
 
   function setupQuizPanel() {
+    document.getElementById("btn-header-restudy")?.addEventListener("click", triggerRestudyCurrentBatch);
+
     document.querySelectorAll("[data-quiz-mode]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const nextTrack = btn.dataset.quizMode === "review" ? "review" : "learn";
@@ -2467,6 +2550,7 @@
     // No due or weak words right now -> show clean review status card
     closeModals();
     toggleFloatingPanel("quiz", true);
+    setHeaderRestudyVisible(false);
     const body = document.getElementById("quiz-body");
     const prog = document.getElementById("quiz-progress-text");
     const titleEl = document.getElementById("quiz-card-title");
@@ -2620,6 +2704,7 @@
     const bookName = getBookDisplayName(cur.bookId);
 
     if (titleEl) titleEl.textContent = q.isRestudy ? "重新浏览本组词" : "Haru 每日喂词";
+    setHeaderRestudyVisible(false);
     if (prog) prog.textContent = q.isRestudy
       ? `重看复习 · ${q.index + 1} / ${totalInBatch} · ${bookName}`
       : `第 ${q.batchNum || 1} 组 · ${q.index + 1} / ${totalInBatch} · ${bookName}`;
@@ -2740,6 +2825,7 @@
     const allSt = getDailyProgressStats("all");
 
     if (titleEl) titleEl.textContent = "今日学习状态";
+    setHeaderRestudyVisible(false);
     if (prog) prog.textContent = `今日进度 ${allSt.taughtToday} / ${allSt.goal} · ${getBookDisplayName(activeBook)}`;
 
     const nextHint = st.earliestNextReviewAt
@@ -2821,6 +2907,7 @@
       : q.isAntiForget
       ? "旧词防遗忘抽查"
       : (isSoftwareBook ? "按钮与键位互考" : "立刻开考");
+    setHeaderRestudyVisible(true);
     if (prog) prog.textContent = `Question ${q.index + 1} / ${q.questions.length} · ${bookName}${cur._isRetry ? " · 错词巩固" : ""}`;
 
     const sameBook = q.allPool.filter(
@@ -2917,38 +3004,9 @@
       <div class="quiz-word-box">${promptHtml}</div>
       <div class="quiz-options"></div>
       <div id="quiz-wrong-box" class="quiz-wrong-feedback hidden"></div>
-      <div class="teach-skip-row" style="margin-top:6px;">
-        <button type="button" id="btn-quiz-restudy" class="teach-btn-skip-one">← 记不清？退出重看本组再考</button>
-      </div>
     `;
     body.scrollTop = 0;
-
-    document.getElementById("btn-quiz-restudy")?.addEventListener("click", () => {
-      markUserInteraction();
-      VoiceEngine.stopSpeaking();
-      const seen = new Set();
-      const batch = [];
-      (q.questions || []).forEach((item) => {
-        const k = (item.word || "").toLowerCase();
-        if (!k || seen.has(k)) return;
-        seen.add(k);
-        batch.push(item);
-      });
-      if (!batch.length) return;
-      state.quiz = {
-        mode: "teach",
-        isRestudy: true,
-        resumeAntiForget: !!q.isAntiForget,
-        resumeWarmup: !!q.isWarmup,
-        resumeDedicatedReview: !!q.isDedicatedReview,
-        bookId: q.bookId,
-        batchNum: 1,
-        teachQueue: batch,
-        index: 0
-      };
-      HaruPet.performAction("friendly");
-      renderTeachCard();
-    });
+    animateQuizBodyTransition();
 
     const sayBtn = document.getElementById("quiz-say-btn");
     if (sayBtn) sayBtn.onclick = () => VoiceEngine.speak(cur.word, state.settings.voice);
@@ -3103,6 +3161,7 @@
     HaruPet.performAction(action);
     showBubble(enMsg, zhMsg, { badge: score === total ? "🏆 Perfect!" : "💪 Keep Going!", speak: true, duration: 10000 });
 
+    setHeaderRestudyVisible(false);
     const nextBtnLabel = q.isWarmup ? "进入今日新词 (5词)" : (q.isDedicatedReview ? "继续专攻复习" : "继续学习");
     const body = document.getElementById("quiz-body");
     body.innerHTML = `

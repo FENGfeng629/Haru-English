@@ -6,7 +6,7 @@ namespace HaruEnglishPet.Services;
 
 public class StorageService
 {
-    public const int CurrentVocabVersion = 6;
+    public const int CurrentVocabVersion = 7;
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -165,6 +165,7 @@ public class StorageService
             .OrderByDescending(p => p.Id == "toefl")
             .ThenByDescending(p => p.Id == "blender")
             .ThenByDescending(p => p.Id == "antigravity")
+            .ThenByDescending(p => p.Id == "dev_compiler")
             .ThenByDescending(p => p.BuiltIn)
             .ThenBy(p => p.Name)
             .ToList();
@@ -245,6 +246,7 @@ public class StorageService
                 Category = string.IsNullOrWhiteSpace(raw.Category)
                     ? (target.Id == "blender" ? "Blender · 自定义"
                         : target.Id == "antigravity" ? "Antigravity · 自定义"
+                        : target.Id == "dev_compiler" ? "编程与编译 · 自定义"
                         : "导入词条")
                     : raw.Category.Trim(),
                 UiLocation = raw.UiLocation?.Trim() ?? "",
@@ -398,7 +400,7 @@ public class StorageService
         //    only migrating/resetting stale QuizPackId and bumping VocabVersion = 4
         if (settings.QuizPackId == "toefl_core") settings.QuizPackId = "toefl";
         else if (settings.QuizPackId == "blender_3d") settings.QuizPackId = "blender";
-        if (settings.QuizPackId is not ("all" or "weak" or "toefl" or "blender" or "antigravity"))
+        if (settings.QuizPackId is not ("all" or "weak" or "toefl" or "blender" or "antigravity" or "dev_compiler"))
         {
             settings.QuizPackId = "all";
         }
@@ -413,7 +415,8 @@ public class StorageService
         {
             ("toefl.json", "toefl"),
             ("blender.json", "blender"),
-            ("antigravity.json", "antigravity")
+            ("antigravity.json", "antigravity"),
+            ("dev_compiler.json", "dev_compiler")
         };
 
         foreach (var (fileName, bookId) in seedFiles)

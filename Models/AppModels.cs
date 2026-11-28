@@ -16,6 +16,8 @@ public class AppSettings
     public int DailyNewWordsGoal { get; set; } = 10;
     // Checked vocab modules for daily equal-split pool (e.g. ["toefl","blender"] => 50% each)
     public List<string> DailyFocusBooks { get; set; } = new() { "toefl", "blender" };
+    // Enabled built-in vocab books (disabled books are hidden from Quiz, Vocab Hub & Daily Pool)
+    public List<string> EnabledBooks { get; set; } = new() { "toefl", "blender", "antigravity", "dev_compiler" };
     // Legacy ratio retained for backward compatibility
     public string DailyFocusRatio { get; set; } = "single_book";
     public string ModelUrl { get; set; } = "models/haru/haru_greeter_t03.model3.json";
@@ -49,6 +51,7 @@ public class HotkeyConfig
 {
     public string Talk { get; set; } = "Alt+T";
     public string Quiz { get; set; } = "Alt+Q";
+    public string Review { get; set; } = "Alt+R";
     public string TogglePet { get; set; } = "Alt+H";
 }
 

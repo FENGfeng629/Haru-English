@@ -199,12 +199,19 @@
             <svg viewBox="0 0 12 12" width="10" height="10"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
           </button>
         </div>
+        <div class="quiz-mode-bar">
+          <div class="seg-pills seg-2 quiz-mode-pills" role="tablist" aria-label="双轨学习模式">
+            <button type="button" class="seg-pill active" data-quiz-mode="learn" role="tab">今日学习</button>
+            <button type="button" class="seg-pill" data-quiz-mode="review" role="tab">专攻复习 <span id="quiz-due-count" class="quiz-due-badge">0</span></button>
+          </div>
+        </div>
         <div class="quiz-book-bar">
-          <div class="seg-pills seg-5 quiz-book-pills" role="group" aria-label="抽查词库切换">
+          <div class="seg-pills quiz-book-pills flex-pills" role="group" aria-label="抽查词库切换">
             <button type="button" class="seg-pill active" data-quiz-book="all">混合</button>
             <button type="button" class="seg-pill" data-quiz-book="toefl">托福</button>
             <button type="button" class="seg-pill" data-quiz-book="blender">Blender</button>
             <button type="button" class="seg-pill" data-quiz-book="antigravity">Antigravity</button>
+            <button type="button" class="seg-pill" data-quiz-book="dev_compiler">编程</button>
             <button type="button" class="seg-pill" data-quiz-book="weak">生词</button>
           </div>
         </div>
@@ -452,6 +459,10 @@
                   <button type="button" id="hk-quiz" class="hotkey-cap" data-hotkey-key="quiz" title="点击后按下组合键修改">Alt + Q</button>
                 </div>
                 <div class="bento-hotkey-row">
+                  <span class="bento-row-title">快速专攻复习（Review）</span>
+                  <button type="button" id="hk-review" class="hotkey-cap" data-hotkey-key="review" title="点击后按下组合键修改">Alt + R</button>
+                </div>
+                <div class="bento-hotkey-row">
                   <span class="bento-row-title">显示 / 隐藏桌宠</span>
                   <button type="button" id="hk-toggle" class="hotkey-cap" data-hotkey-key="togglePet" title="点击后按下组合键修改">Alt + H</button>
                 </div>
@@ -515,6 +526,26 @@
                   <button type="button" class="seg-pill" data-daily-goal="20">20 词</button>
                 </div>
 
+                <div class="bento-sub-label">启用词库管理（关闭后自动从浮窗、词库栏与每日池隐藏）</div>
+                <div id="enabled-books-grid" class="enable-books-grid" role="group" aria-label="启用词库隔离">
+                  <label class="enable-book-chip checked" data-enable-card="toefl">
+                    <input type="checkbox" data-enable-book="toefl" checked />
+                    <span>托福 TOEFL</span>
+                  </label>
+                  <label class="enable-book-chip checked" data-enable-card="blender">
+                    <input type="checkbox" data-enable-book="blender" checked />
+                    <span>Blender 3D</span>
+                  </label>
+                  <label class="enable-book-chip checked" data-enable-card="antigravity">
+                    <input type="checkbox" data-enable-book="antigravity" checked />
+                    <span>Antigravity</span>
+                  </label>
+                  <label class="enable-book-chip checked" data-enable-card="dev_compiler">
+                    <input type="checkbox" data-enable-book="dev_compiler" checked />
+                    <span>编程与编译</span>
+                  </label>
+                </div>
+
                 <div class="bento-sub-label">每日抽查模块配比（勾选模块自动均分占比，如勾 2 项各占 50%）</div>
                 <div id="daily-books-checklist" class="daily-books-checklist" role="group" aria-label="每日抽查模块勾选">
                   <label class="daily-book-check" data-focus-book-card="toefl">
@@ -531,6 +562,11 @@
                     <input type="checkbox" data-focus-book="antigravity" />
                     <span class="daily-book-check-name">Antigravity</span>
                     <span class="daily-book-pct" data-focus-pct="antigravity">0%</span>
+                  </label>
+                  <label class="daily-book-check" data-focus-book-card="dev_compiler">
+                    <input type="checkbox" data-focus-book="dev_compiler" />
+                    <span class="daily-book-check-name">编程与编译</span>
+                    <span class="daily-book-pct" data-focus-pct="dev_compiler">0%</span>
                   </label>
                 </div>
 
@@ -596,15 +632,16 @@
 
           <!-- ==================== PAGE 2.5: 词库中心（托福 TOEFL + Blender 3D + Antigravity + 个人生词本 + 统计） ==================== -->
           <div id="set-tab-words" class="words-hub-page hidden">
-            <!-- Top Row: 6-Way Vocab Book Switcher Capsules (Pinned Daily Bag + All + Weak + 3 Books) + View Mode Switch -->
+            <!-- Top Row: Vocab Book Switcher Capsules (Pinned Daily Bag + All + Weak + Enabled Books) + View Mode Switch -->
             <div class="words-subnav-bar">
-              <div class="seg-pills seg-6 vocab-book-tabs" role="tablist" aria-label="词库切换">
+              <div class="seg-pills vocab-book-tabs flex-pills" role="tablist" aria-label="词库切换">
                 <button type="button" class="seg-pill active" data-vocab-book="daily" role="tab">今日词袋</button>
                 <button type="button" class="seg-pill" data-vocab-book="all" role="tab">全部</button>
                 <button type="button" class="seg-pill" data-vocab-book="weak" role="tab">生词本</button>
                 <button type="button" class="seg-pill" data-vocab-book="toefl" role="tab">托福 TOEFL</button>
                 <button type="button" class="seg-pill" data-vocab-book="blender" role="tab">Blender 3D</button>
                 <button type="button" class="seg-pill" data-vocab-book="antigravity" role="tab">Antigravity</button>
+                <button type="button" class="seg-pill" data-vocab-book="dev_compiler" role="tab">编程与编译</button>
               </div>
               <div class="seg-pills seg-3 words-view-switch" role="tablist" aria-label="视图切换">
                 <button type="button" class="seg-pill active" data-words-tab="weak" role="tab">词表</button>
@@ -659,6 +696,7 @@
                     <option value="toefl">追加合并到「托福 TOEFL」</option>
                     <option value="blender">追加合并到「Blender 3D」</option>
                     <option value="antigravity">追加合并到「Antigravity」</option>
+                    <option value="dev_compiler">追加合并到「编程与编译」</option>
                     <option value="new">新建独立自定义词库</option>
                   </select>
                   <input id="quick-import-name" class="s-input hidden" placeholder="新词库名称（如：托福核心 3000 词）" />
@@ -700,6 +738,7 @@
                     <option value="TOEFL" selected>TOEFL 托福</option>
                     <option value="3D">Blender 3D</option>
                     <option value="AI">Antigravity</option>
+                    <option value="DEV">编程与编译</option>
                     <option value="Custom">自定义词库</option>
                   </select>
                 </div>

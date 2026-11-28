@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private const int HOTKEY_ID_TALK = 0x4101;
     private const int HOTKEY_ID_QUIZ = 0x4102;
     private const int HOTKEY_ID_TOGGLE_PET = 0x4103;
+    private const int HOTKEY_ID_REVIEW = 0x4104;
     private const uint MOD_ALT = 0x0001;
     private const uint MOD_CONTROL = 0x0002;
     private const uint MOD_SHIFT = 0x0004;
@@ -285,6 +286,10 @@ public partial class MainWindow : Window
             {
                 SendTrayCommand("startQuiz");
             }
+            else if (id == HOTKEY_ID_REVIEW)
+            {
+                SendTrayCommand("startReviewMode");
+            }
             else if (id == HOTKEY_ID_TOGGLE_PET)
             {
                 _hiddenByFullscreen = false;
@@ -315,6 +320,7 @@ public partial class MainWindow : Window
         if (cfg == null) return;
         TryRegisterHotkeyCombo(HOTKEY_ID_TALK, cfg.Talk);
         TryRegisterHotkeyCombo(HOTKEY_ID_QUIZ, cfg.Quiz);
+        TryRegisterHotkeyCombo(HOTKEY_ID_REVIEW, cfg.Review);
         TryRegisterHotkeyCombo(HOTKEY_ID_TOGGLE_PET, cfg.TogglePet);
     }
 
@@ -323,6 +329,7 @@ public partial class MainWindow : Window
         if (_hwnd == IntPtr.Zero) return;
         try { UnregisterHotKey(_hwnd, HOTKEY_ID_TALK); } catch { }
         try { UnregisterHotKey(_hwnd, HOTKEY_ID_QUIZ); } catch { }
+        try { UnregisterHotKey(_hwnd, HOTKEY_ID_REVIEW); } catch { }
         try { UnregisterHotKey(_hwnd, HOTKEY_ID_TOGGLE_PET); } catch { }
     }
 

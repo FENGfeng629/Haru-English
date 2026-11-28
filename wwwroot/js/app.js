@@ -48,6 +48,7 @@
     miniIdleTimer: null,
     miniIdleHovered: false,
     idleSnoozeUntil: 0,
+    quizTrack: "learn", // learn | review
     quiz: null,
     currentActionWord: null,
     petPos: { x: 0, y: 0 },
@@ -165,6 +166,7 @@
 
     // Apply saved theme (white/black) and border color
     applyAppearance(state.settings.uiTheme, state.settings.uiBorderColor);
+    applyEnabledBooksVisibility();
 
     // Position pet (default bottom-right corner)
     initPetPosition();
@@ -240,6 +242,7 @@
         const quizPackChanged = (prevSettings.quizPackId || "all") !== (next.quizPackId || "all");
         state.settings = next;
         applyAppearance(next.uiTheme, next.uiBorderColor);
+        applyEnabledBooksVisibility();
         updateChatHeaderBadges();
         syncQuizBookButtons(next.quizPackId);
         if (quizPackChanged && state.activePanel === "quiz") {
@@ -382,6 +385,7 @@
       quizPackId: "all",
       dailyNewWordsGoal: 10,
       dailyFocusBooks: ["toefl", "blender"],
+      enabledBooks: ["toefl", "blender", "antigravity", "dev_compiler"],
       dailyFocusRatio: "single_book",
       modelUrl: "models/haru/haru_greeter_t03.model3.json",
       alwaysOnTop: true,
@@ -399,7 +403,7 @@
       enableAbsenceReminder: true,
       uiTheme: "light",
       uiBorderColor: "blue",
-      hotkeys: { talk: "Alt+T", quiz: "Alt+Q", togglePet: "Alt+H" },
+      hotkeys: { talk: "Alt+T", quiz: "Alt+Q", review: "Alt+R", togglePet: "Alt+H" },
       api: { providerPreset: "openai", baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4o-mini", whisperModel: "whisper-1", ttsModel: "tts-1", temperature: 0.7 },
       voice: { ttsProvider: "edge", edgeVoice: "en-US-AnaNeural", openAiVoice: "nova", webSpeechVoice: "", speechRate: 1.0, speechPitch: 1.0, sttProvider: "auto" },
       cloudSync: { provider: "none", endpoint: "", username: "", tokenOrPassword: "", remoteFileName: "haru-english-pet-sync.json", gistId: "", autoSync: false, lastSyncAt: "" }
@@ -1568,10 +1572,36 @@
     });
   }
 
-  // ==================== SRS DAILY ACTIVE POOL + TEACH MODE + 3-TIER PROGRESSIVE QUIZ ====================
+  // ==================== SRS DAILY ACTIVE POOL + DUAL-TRACK REVIEW + 3-TIER PROGRESSIVE QUIZ ====================
+  const ALL_BUILTIN_BOOKS = ["toefl", "blender", "antigravity", "dev_compiler"];
   const SRS_TEN_MIN_MS = 10 * 60 * 1000;
   const SRS_ONE_DAY_MS = 24 * 60 * 60 * 1000;
   const SRS_THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+  const SRS_SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+  function getEnabledBooks() {
+    const raw = state.settings?.enabledBooks;
+    if (Array.isArray(raw) && raw.length > 0) {
+      const cleaned = raw.filter((id) => ALL_BUILTIN_BOOKS.includes(id));
+      if (cleaned.length > 0) return [...new Set(cleaned)];
+    }
+    return [...ALL_BUILTIN_BOOKS];
+  }
+
+  function applyEnabledBooksVisibility() {
+    const enabled = getEnabledBooks();
+    const enabledSet = new Set(enabled);
+    ALL_BUILTIN_BOOKS.forEach((id) => {
+      const isOn = enabledSet.has(id);
+      document.querySelectorAll(`[data-quiz-book="${id}"]`).forEach((el) => el.classList.toggle("hidden", !isOn));
+      document.querySelectorAll(`[data-vocab-book="${id}"]`).forEach((el) => el.classList.toggle("hidden", !isOn));
+      document.querySelectorAll(`[data-focus-book-card="${id}"]`).forEach((el) => el.classList.toggle("hidden", !isOn));
+      const enCb = document.querySelector(`[data-enable-book="${id}"]`);
+      const enCard = document.querySelector(`[data-enable-card="${id}"]`);
+      if (enCb) enCb.checked = isOn;
+      if (enCard) enCard.classList.toggle("checked", isOn);
+    });
+  }
 
   function normalizeVocabProgress(raw) {
     const today = todayStr();
@@ -1591,10 +1621,12 @@
 
   function buildAllEntriesIndex() {
     const map = new Map();
-    const byBook = { toefl: [], blender: [], antigravity: [], all: [] };
+    const enabledSet = new Set(getEnabledBooks());
+    const byBook = { toefl: [], blender: [], antigravity: [], dev_compiler: [], all: [] };
     (state.knowledgePacks || []).forEach((pack) => {
       if (pack.enabled === false) return;
       const bId = pack.bookId || pack.id || "custom";
+      if (ALL_BUILTIN_BOOKS.includes(bId) && !enabledSet.has(bId)) return;
       (pack.entries || []).forEach((e) => {
         if (!e || !e.word || !e.meaning) return;
         const key = e.word.trim().toLowerCase();
@@ -1619,6 +1651,7 @@
         if (norm.bookId === "toefl" || norm.bookId === "toefl_core") byBook.toefl.push(norm);
         else if (norm.bookId === "blender" || norm.bookId === "blender_3d") byBook.blender.push(norm);
         else if (norm.bookId === "antigravity") byBook.antigravity.push(norm);
+        else if (norm.bookId === "dev_compiler") byBook.dev_compiler.push(norm);
       });
     });
     return { map, byBook };
@@ -1652,22 +1685,23 @@
   }
 
   function getActiveFocusBooks() {
-    const validIds = ["toefl", "blender", "antigravity"];
+    const enabled = getEnabledBooks();
+    const enabledSet = new Set(enabled);
     const raw = state.settings?.dailyFocusBooks;
     if (Array.isArray(raw) && raw.length > 0) {
-      const cleaned = raw.filter((id) => validIds.includes(id));
+      const cleaned = raw.filter((id) => enabledSet.has(id));
       if (cleaned.length > 0) return [...new Set(cleaned)];
     }
-    return ["toefl", "blender"];
+    return enabled.slice(0, Math.min(2, enabled.length));
   }
 
   function computeDailyTargets(goal, _ratio, activeBook) {
-    // If user explicitly set a single default quiz pack, honor it; otherwise equal-split across checked dailyFocusBooks!
+    const enabledSet = new Set(getEnabledBooks());
     const checked = getActiveFocusBooks();
-    const books = (activeBook && ["toefl", "blender", "antigravity"].includes(activeBook))
+    const books = (activeBook && enabledSet.has(activeBook))
       ? [activeBook]
       : checked;
-    const targets = { toefl: 0, blender: 0, antigravity: 0 };
+    const targets = { toefl: 0, blender: 0, antigravity: 0, dev_compiler: 0 };
     if (!books.length) return targets;
     const base = Math.floor(goal / books.length);
     let rem = goal - base * books.length;
@@ -1742,11 +1776,13 @@
 
       const wantBlender = Math.max(0, targets.blender - countInQueue("blender"));
       const wantAg = Math.max(0, targets.antigravity - countInQueue("antigravity"));
+      const wantDev = Math.max(0, targets.dev_compiler - countInQueue("dev_compiler"));
       const wantToefl = Math.max(0, targets.toefl - countInQueue("toefl"));
 
       let unlocked = 0;
       unlocked += unlockFromList(byBook.blender, Math.min(wantBlender, needed - unlocked));
       unlocked += unlockFromList(byBook.antigravity, Math.min(wantAg, needed - unlocked));
+      unlocked += unlockFromList(byBook.dev_compiler, Math.min(wantDev, needed - unlocked));
       unlocked += unlockFromList(byBook.toefl, Math.min(wantToefl, needed - unlocked));
 
       // Fill any remainder from all enabled entries in natural wordRank order
@@ -1837,6 +1873,11 @@
     if (sbWords) {
       sbWords.textContent = `${st.taughtToday} / ${st.goal}`;
     }
+    const dueBadge = document.getElementById("quiz-due-count");
+    if (dueBadge) {
+      const reviewPoolCount = Math.max(st.dueCount, (state.weakWords || []).filter((w) => !w.mastered).length);
+      dueBadge.textContent = String(reviewPoolCount);
+    }
   }
 
   function maybeCelebrateDailyGoal() {
@@ -1871,10 +1912,19 @@
     if (bookId === "toefl" || bookId === "toefl_core") return "托福 TOEFL";
     if (bookId === "blender" || bookId === "blender_3d") return "Blender 3D";
     if (bookId === "antigravity") return "Antigravity";
+    if (bookId === "dev_compiler") return "编程与编译";
     if (bookId === "weak") return "个人生词本";
     if (bookId === "all") return "混合学习";
     const found = (state.knowledgePacks || []).find((p) => p.id === bookId || p.bookId === bookId);
     return found ? found.name : "自定义词库";
+  }
+
+  function syncQuizModeTabs(track) {
+    const activeTrack = track || state.quizTrack || "learn";
+    state.quizTrack = activeTrack;
+    document.querySelectorAll("[data-quiz-mode]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.quizMode === activeTrack);
+    });
   }
 
   function syncQuizBookButtons(activeBook) {
@@ -2008,13 +2058,30 @@
   }
 
   function setupQuizPanel() {
+    document.querySelectorAll("[data-quiz-mode]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const nextTrack = btn.dataset.quizMode === "review" ? "review" : "learn";
+        syncQuizModeTabs(nextTrack);
+        const curBook = state.settings?.quizPackId || "all";
+        if (nextTrack === "review") {
+          startReviewMode(curBook);
+        } else {
+          startWordQuiz(curBook === "weak", false, curBook);
+        }
+      });
+    });
+
     document.querySelectorAll("[data-quiz-book]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const nextBook = btn.dataset.quizBook || "all";
         state.settings.quizPackId = nextBook;
         syncQuizBookButtons(nextBook);
         HostBridge.rpc("saveSettings", state.settings);
-        startWordQuiz(nextBook === "weak", false, nextBook);
+        if (state.quizTrack === "review") {
+          startReviewMode(nextBook);
+        } else {
+          startWordQuiz(nextBook === "weak", false, nextBook);
+        }
       });
     });
 
@@ -2125,6 +2192,78 @@
     return list;
   }
 
+  function startReviewMode(bookOverride = null, allowEarly = false) {
+    hideMiniIdleBubble(true);
+    ensureDailyActivePool(true);
+    applyEnabledBooksVisibility();
+    const activeBook = bookOverride || state.settings?.quizPackId || "all";
+    syncQuizModeTabs("review");
+    syncQuizBookButtons(activeBook);
+
+    const { map, byBook } = buildAllEntriesIndex();
+    const due = collectDueReviewItems(activeBook, allowEarly);
+    const seen = new Set(due.map((x) => x.word.toLowerCase()));
+
+    // Merge unmastered weak words into Concentrated Review pool
+    (state.weakWords || [])
+      .filter((w) => !w.mastered && w.word && w.meaning)
+      .forEach((w) => {
+        const k = w.word.trim().toLowerCase();
+        if (seen.has(k)) return;
+        const entry = map.get(k);
+        if (activeBook !== "all" && activeBook !== "weak" && (entry?.bookId || w.bookId) !== activeBook) return;
+        seen.add(k);
+        const prog = getWordProgress(k);
+        due.push({
+          ...(entry || {
+            id: w.id || "",
+            bookId: w.bookId || "weak",
+            word: w.word,
+            phonetic: w.phonetic || "",
+            pos: w.pos || "",
+            meaning: w.meaning,
+            category: w.category || "",
+            uiLocation: w.uiLocation || "",
+            shortcut: w.shortcut || "",
+            example: w.example || "",
+            exampleZh: w.exampleZh || ""
+          }),
+          streak: prog?.streak || 0,
+          status: prog?.status || "learning",
+          nextReviewAt: prog?.nextReviewAt || 0,
+          isWeak: true
+        });
+      });
+
+    if (due.length > 0) {
+      launchQuizSession(due.slice(0, 8), activeBook, byBook.all, { isAntiForget: true, isDedicatedReview: true });
+      return;
+    }
+
+    // No due or weak words right now -> show clean review status card
+    closeModals();
+    toggleFloatingPanel("quiz", true);
+    const body = document.getElementById("quiz-body");
+    const prog = document.getElementById("quiz-progress-text");
+    const titleEl = document.getElementById("quiz-card-title");
+    const st = getDailyProgressStats(activeBook);
+    if (titleEl) titleEl.textContent = "专攻复习";
+    if (prog) prog.textContent = `${getBookDisplayName(activeBook)} · 暂无到期复习词`;
+    body.innerHTML = `
+      <div class="quiz-caughtup-box">
+        <div class="quiz-caughtup-title">✨ 当前没有到期的复习词</div>
+        <div class="quiz-caughtup-sub">${st.earliestNextReviewAt ? `下一批到期：${formatRelativeReviewTime(st.earliestNextReviewAt)}` : "先在「今日学习」中认识几个新词吧！"}</div>
+        <div class="toolbar-row" style="justify-content:center;gap:8px;flex-wrap:wrap;">
+          ${st.activeCount > 0 ? `<button type="button" id="btn-review-early" class="primary-btn">提前巩固已学词</button>` : ""}
+          <button type="button" id="btn-go-learn" class="secondary-btn">切回今日学习</button>
+        </div>
+      </div>
+    `;
+    document.getElementById("btn-review-early")?.addEventListener("click", () => startReviewMode(activeBook, true));
+    document.getElementById("btn-go-learn")?.addEventListener("click", () => startWordQuiz(false, false, activeBook));
+    HostBridge.reportHitRects();
+  }
+
   const BATCH_SIZE = 5;
 
   function startWordQuiz(weakOnly = false, isProactiveIdle = false, bookOverride = null, options = {}) {
@@ -2134,7 +2273,9 @@
     }
     hideMiniIdleBubble(true);
     ensureDailyActivePool(true);
+    applyEnabledBooksVisibility();
     const activeBook = bookOverride || (weakOnly ? "weak" : (state.settings?.quizPackId || "all"));
+    syncQuizModeTabs(weakOnly ? "review" : "learn");
     syncQuizBookButtons(activeBook);
 
     const { byBook } = buildAllEntriesIndex();
@@ -2144,7 +2285,7 @@
     if (activeBook === "weak" || allowEarly) {
       const reviewPool = collectDueReviewItems(activeBook, true);
       if (reviewPool.length > 0) {
-        launchQuizSession(reviewPool.slice(0, 5), activeBook, byBook.all, false);
+        launchQuizSession(reviewPool.slice(0, 5), activeBook, byBook.all, { isAntiForget: true });
         return;
       }
       closeModals();
@@ -2153,9 +2294,19 @@
       return;
     }
 
-    // 2. Check today's unseen words first -> 5-word batch Browse -> Immediate 5-question Quiz!
+    // 2. Dual-Track Interleave: Before starting a 5-word new batch in "今日学习",
+    //    auto-interleave AT MOST 3 due review words as warm-up (capped at 3 so backlog never overwhelms!)
+    if (!options.skipWarmup) {
+      const dueWarmup = collectDueReviewItems(activeBook, false).slice(0, 3);
+      if (dueWarmup.length > 0) {
+        launchQuizSession(dueWarmup, activeBook, byBook.all, { isWarmup: true });
+        return;
+      }
+    }
+
+    // 3. Check today's unseen words -> 5-word batch Browse -> Immediate 5-question Quiz!
     let unseenToday = collectUnseenDailyItems(activeBook);
-    if (unseenToday.length === 0 && ["toefl", "blender", "antigravity"].includes(activeBook) && options.autoUnlockBook !== false) {
+    if (unseenToday.length === 0 && ALL_BUILTIN_BOOKS.includes(activeBook) && options.autoUnlockBook !== false) {
       const st = getDailyProgressStats(activeBook);
       if (st.activeCount === 0) {
         unlockExtraDailyWords(BATCH_SIZE, activeBook);
@@ -2184,28 +2335,32 @@
       return;
     }
 
-    // 3. Today's daily quota is done -> automatically enter Anti-Forgetting Review Mode
-    //    (ONLY previously learned learning/reviewing words, NEVER unseen words!)
+    // 4. Today's daily quota is done -> automatically enter Anti-Forgetting Review Mode
     const antiForgetPool = collectDueReviewItems(activeBook, false);
     const fallbackLearned = antiForgetPool.length > 0 ? antiForgetPool : collectDueReviewItems(activeBook, true);
     if (fallbackLearned.length > 0) {
-      launchQuizSession(fallbackLearned.slice(0, 5), activeBook, byBook.all, true);
+      launchQuizSession(fallbackLearned.slice(0, 5), activeBook, byBook.all, { isAntiForget: true });
       return;
     }
 
-    // 4. All caught up
+    // 5. All caught up
     closeModals();
     toggleFloatingPanel("quiz", true);
     renderCaughtUpCard(activeBook);
   }
 
-  function launchQuizSession(questions, activeBook, allPool, isAntiForget = false) {
+  function launchQuizSession(questions, activeBook, allPool, opts = {}) {
+    const isAntiForget = typeof opts === "boolean" ? opts : !!opts.isAntiForget;
+    const isWarmup = typeof opts === "object" ? !!opts.isWarmup : false;
+    const isDedicatedReview = typeof opts === "object" ? !!opts.isDedicatedReview : false;
     if (typeof VoiceEngine.prewarm === "function") {
       VoiceEngine.prewarm(questions.map((x) => x.word), state.settings.voice);
     }
     state.quiz = {
       mode: "quiz",
       isAntiForget,
+      isWarmup,
+      isDedicatedReview,
       bookId: activeBook,
       questions: questions.map((x) => ({ ...x, _isRetry: false })),
       initialCount: questions.length,
@@ -2237,7 +2392,7 @@
     const cur = q.teachQueue[q.index];
     const totalInBatch = q.teachQueue.length;
     const isLast = q.index === totalInBatch - 1;
-    const isSoftwareBook = cur.bookId === "blender" || cur.bookId === "antigravity";
+    const isSoftwareBook = cur.bookId === "blender" || cur.bookId === "antigravity" || (cur.bookId === "dev_compiler" && !!cur.shortcut);
     const bookName = getBookDisplayName(cur.bookId);
 
     if (titleEl) titleEl.textContent = "Haru 每日喂词";
@@ -2410,7 +2565,7 @@
     q.answered = false;
     const bookName = getBookDisplayName(cur.bookId || q.bookId);
     const streak = cur.streak || 0;
-    const isSoftwareBook = cur.bookId === "blender" || cur.bookId === "antigravity";
+    const isSoftwareBook = cur.bookId === "blender" || cur.bookId === "antigravity" || (cur.bookId === "dev_compiler" && !!cur.shortcut);
 
     // Progressive Quiz Modes:
     // Software books (Blender / Antigravity):
@@ -2427,7 +2582,11 @@
       ? (streak === 0 ? "认按钮 · 英→中" : streak === 1 ? "找按钮 · 中→英" : (isShortcutStage ? "记键位 · 操作→键位" : "找按钮 · 终极巩固"))
       : (streak === 0 ? "第 1 阶 · 看英选义" : streak === 1 ? "第 2 阶 · 语境选词" : "第 3 阶 · 终极巩固");
 
-    if (titleEl) titleEl.textContent = q.isAntiForget
+    if (titleEl) titleEl.textContent = q.isWarmup
+      ? "热身复习（≤3 词）"
+      : q.isDedicatedReview
+      ? "专攻复习"
+      : q.isAntiForget
       ? "旧词防遗忘抽查"
       : (isSoftwareBook ? "按钮与键位互考" : "立刻开考");
     if (prog) prog.textContent = `Question ${q.index + 1} / ${q.questions.length} · ${bookName}${cur._isRetry ? " · 错词巩固" : ""}`;
@@ -2573,7 +2732,7 @@
         nextReviewAt = now + SRS_THREE_DAYS_MS; // +3 days
       } else {
         nextStatus = "mastered";
-        nextReviewAt = 0;
+        nextReviewAt = now + SRS_SEVEN_DAYS_MS; // +7 days mastered retention
       }
 
       upsertWordProgress(cur, {
@@ -2675,19 +2834,24 @@
     HaruPet.performAction(action);
     showBubble(enMsg, zhMsg, { badge: score === total ? "🏆 Perfect!" : "💪 Keep Going!", speak: true, duration: 10000 });
 
+    const nextBtnLabel = q.isWarmup ? "进入今日新词 (5词)" : (q.isDedicatedReview ? "继续专攻复习" : "继续学习");
     const body = document.getElementById("quiz-body");
     body.innerHTML = `
       <div class="quiz-summary">
         <div class="quiz-score-big">${score} / ${total}</div>
         <p style="margin:8px 0;font-size:13px;color:var(--text-main);">${escapeHtml(zhMsg)}</p>
-        ${q.missed.length ? `<p style="font-size:12px;color:var(--accent);margin-bottom:10px;">10分钟后复测：${q.missed.map((m) => escapeHtml(m.word)).join(", ")}</p>` : ""}
+        ${q.missed.length ? `<p style="font-size:12px;color:var(--accent);margin-bottom:10px;">已记入生词本：${q.missed.map((m) => escapeHtml(m.word)).join(", ")}</p>` : ""}
         <div class="toolbar-row" style="justify-content:center;margin-top:10px;">
-          <button id="quiz-again-btn" class="primary-btn">继续学习</button>
+          <button id="quiz-again-btn" class="primary-btn">${nextBtnLabel}</button>
           <button id="quiz-close-btn" class="secondary-btn">完成</button>
         </div>
       </div>
     `;
-    document.getElementById("quiz-again-btn").onclick = () => startWordQuiz(false, false, q.bookId);
+    document.getElementById("quiz-again-btn").onclick = () => {
+      if (q.isWarmup) startWordQuiz(false, false, q.bookId, { skipWarmup: true });
+      else if (q.isDedicatedReview) startReviewMode(q.bookId);
+      else startWordQuiz(false, false, q.bookId);
+    };
     document.getElementById("quiz-close-btn").onclick = closeFloatingPanels;
     HostBridge.reportHitRects();
   }
@@ -2839,7 +3003,7 @@
   };
 
   function selectVocabBook(bookId) {
-    const valid = ["daily", "all", "weak", "toefl", "blender", "antigravity"].includes(bookId) ? bookId : "daily";
+    const valid = ["daily", "all", "weak", "toefl", "blender", "antigravity", "dev_compiler"].includes(bookId) ? bookId : "daily";
     vocabView.book = valid;
     document.querySelectorAll("[data-vocab-book]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.vocabBook === valid);
@@ -2856,11 +3020,11 @@
     }
     // Pre-select matching target in quick JSON importer AND default quiz pack to current selected book
     const targetSel = document.getElementById("quick-import-target");
-    if (targetSel && (valid === "toefl" || valid === "blender" || valid === "antigravity")) {
+    if (targetSel && ALL_BUILTIN_BOOKS.includes(valid)) {
       targetSel.value = valid;
       document.getElementById("quick-import-name")?.classList.add("hidden");
     }
-    if (["toefl", "blender", "antigravity", "weak"].includes(valid) && state.settings && state.settings.quizPackId !== valid) {
+    if (["toefl", "blender", "antigravity", "dev_compiler", "weak"].includes(valid) && state.settings && state.settings.quizPackId !== valid) {
       state.settings.quizPackId = valid;
       syncQuizBookButtons(valid);
       const quizPackSel = document.getElementById("set-quiz-pack");
@@ -3014,7 +3178,7 @@
       return;
     }
 
-    const defaultLvl = targetBookId === "blender" ? "3D" : targetBookId === "antigravity" ? "AI" : "TOEFL";
+    const defaultLvl = targetBookId === "blender" ? "3D" : targetBookId === "antigravity" ? "AI" : targetBookId === "dev_compiler" ? "DEV" : "TOEFL";
     const entries = parseBulkKnowledge(raw, defaultLvl);
     if (!entries.length) {
       if (st) {
@@ -3056,17 +3220,17 @@
     const acc = (s.totalQuizCorrect + s.totalQuizWrong) > 0
       ? Math.round((s.totalQuizCorrect * 100) / (s.totalQuizCorrect + s.totalQuizWrong)) + "%"
       : "—";
-    const toeflPack = (state.knowledgePacks || []).find((p) => p.id === "toefl");
-    const blenderPack = (state.knowledgePacks || []).find((p) => p.id === "blender");
-    const agPack = (state.knowledgePacks || []).find((p) => p.id === "antigravity");
-    const totalEntries = (state.knowledgePacks || []).reduce((sum, p) => sum + (p.entries?.length || 0), 0);
+    const enabledSet = new Set(getEnabledBooks());
+    const enabledPacks = (state.knowledgePacks || []).filter((p) => !ALL_BUILTIN_BOOKS.includes(p.id) || enabledSet.has(p.id));
+    const totalEntries = enabledPacks.reduce((sum, p) => sum + (p.entries?.length || 0), 0);
     const wEl = document.getElementById("words-sb-weak");
     const aEl = document.getElementById("words-sb-acc");
     const pEl = document.getElementById("words-sb-packs");
     if (wEl) wEl.textContent = String(unmastered);
     if (aEl) aEl.textContent = acc;
     if (pEl) {
-      pEl.textContent = `托福 ${toeflPack?.entries?.length || 0} · Blender ${blenderPack?.entries?.length || 0} · Antigravity ${agPack?.entries?.length || 0}（共 ${totalEntries} 词）`;
+      const parts = enabledPacks.slice(0, 4).map((p) => `${p.name.split(" ")[0]} ${p.entries?.length || 0}`);
+      pEl.textContent = `${parts.join(" · ")}（共 ${totalEntries} 词）`;
     }
     updateSidebarStatus();
   }
@@ -3165,8 +3329,9 @@
         .map((w) => ({ ...w, _isWeakRow: true }));
     }
 
+    const enabledSet = new Set(getEnabledBooks());
     const packs = bookId === "all"
-      ? (state.knowledgePacks || [])
+      ? (state.knowledgePacks || []).filter((p) => !ALL_BUILTIN_BOOKS.includes(p.id) || enabledSet.has(p.id))
       : (state.knowledgePacks || []).filter((p) => p.id === bookId || p.bookId === bookId);
 
     const out = [];
@@ -3195,11 +3360,13 @@
     card.className = `word-item-card${isWeakRow && item.mastered ? " mastered" : ""}`;
 
     const bookId = item.bookId || "";
-    const showBookTag = vocabView.book === "all" || vocabView.book === "daily" || (isWeakRow && (bookId === "toefl" || bookId === "blender" || bookId === "antigravity"));
+    const showBookTag = vocabView.book === "all" || vocabView.book === "daily" || (isWeakRow && ALL_BUILTIN_BOOKS.includes(bookId));
     const bookTagText = bookId === "blender"
       ? "Blender 3D"
       : bookId === "antigravity"
       ? "Antigravity"
+      : bookId === "dev_compiler"
+      ? "编程与编译"
       : bookId === "toefl"
       ? "托福 TOEFL"
       : (item._bookName || "");
@@ -3207,6 +3374,8 @@
       ? "word-book-tag blender"
       : bookId === "antigravity"
       ? "word-book-tag antigravity"
+      : bookId === "dev_compiler"
+      ? "word-book-tag dev_compiler"
       : "word-book-tag";
 
     const prog = getWordProgress(item.word);
@@ -3233,7 +3402,7 @@
       tagsHtml.push(`<span class="word-cat-tag">错 ${item.wrongCount || 0} / 对 ${item.correctCount || 0}</span>`);
     }
 
-    const isSoftCard = bookId === "blender" || bookId === "antigravity";
+    const isSoftCard = bookId === "blender" || bookId === "antigravity" || (bookId === "dev_compiler" && !!item.shortcut);
     card.innerHTML = `
       <div class="word-card-body">
         <div class="word-main">
@@ -3950,6 +4119,34 @@
       });
     });
 
+    document.querySelectorAll("[data-enable-book]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const enabled = Array.from(document.querySelectorAll("[data-enable-book]"))
+          .filter((el) => el.checked)
+          .map((el) => el.dataset.enableBook);
+        if (enabled.length === 0) {
+          cb.checked = true;
+          return;
+        }
+        state.settings.enabledBooks = enabled;
+        // Keep dailyFocusBooks & quizPackId strictly within enabledBooks
+        const validFocus = (state.settings.dailyFocusBooks || []).filter((id) => enabled.includes(id));
+        state.settings.dailyFocusBooks = validFocus.length > 0 ? validFocus : [enabled[0]];
+        if (ALL_BUILTIN_BOOKS.includes(state.settings.quizPackId) && !enabled.includes(state.settings.quizPackId)) {
+          state.settings.quizPackId = enabled.length === 1 ? enabled[0] : "all";
+        }
+        if (ALL_BUILTIN_BOOKS.includes(vocabView.book) && !enabled.includes(vocabView.book)) {
+          vocabView.book = "daily";
+        }
+        applyEnabledBooksVisibility();
+        renderDailyFocusBooksUI();
+        populateQuizPackDropdown();
+        rebuildUntaughtDailyQueue();
+        renderWeakWordsList();
+        autoSaveSettings();
+      });
+    });
+
     document.querySelectorAll("[data-focus-book]").forEach((cb) => {
       cb.addEventListener("change", () => {
         const selected = Array.from(document.querySelectorAll("[data-focus-book]"))
@@ -4259,12 +4456,14 @@
   }
 
   function populateHotkeysUI() {
-    const hk = state.settings?.hotkeys || { talk: "Alt+T", quiz: "Alt+Q", togglePet: "Alt+H" };
+    const hk = state.settings?.hotkeys || { talk: "Alt+T", quiz: "Alt+Q", review: "Alt+R", togglePet: "Alt+H" };
     const t = document.getElementById("hk-talk");
     const q = document.getElementById("hk-quiz");
+    const r = document.getElementById("hk-review");
     const p = document.getElementById("hk-toggle");
     if (t) t.textContent = formatHotkeyDisplay(hk.talk);
     if (q) q.textContent = formatHotkeyDisplay(hk.quiz);
+    if (r) r.textContent = formatHotkeyDisplay(hk.review || "Alt+R");
     if (p) p.textContent = formatHotkeyDisplay(hk.togglePet);
   }
 
@@ -4272,8 +4471,10 @@
     const quizPackSel = document.getElementById("set-quiz-pack");
     if (!quizPackSel) return;
     const s = state.settings || {};
-    quizPackSel.innerHTML = `<option value="all">混合抽查（托福 + Blender + Antigravity 全部已启用）</option><option value="weak">仅个人生词本</option>`;
+    const enabledSet = new Set(getEnabledBooks());
+    quizPackSel.innerHTML = `<option value="all">混合抽查（按已勾选模块均分）</option><option value="weak">仅个人生词本</option>`;
     (state.knowledgePacks || []).forEach((pack) => {
+      if (ALL_BUILTIN_BOOKS.includes(pack.id) && !enabledSet.has(pack.id)) return;
       const opt = document.createElement("option");
       opt.value = pack.id;
       opt.textContent = `${pack.name}（${(pack.entries || []).length} 词）`;
@@ -4297,6 +4498,7 @@
   }
 
   function renderDailyFocusBooksUI() {
+    applyEnabledBooksVisibility();
     const active = getActiveFocusBooks();
     const count = active.length || 1;
     const basePct = Math.floor(100 / count);
@@ -4306,7 +4508,7 @@
       pctMap[id] = basePct + (rem > 0 ? 1 : 0);
       if (rem > 0) rem--;
     });
-    ["toefl", "blender", "antigravity"].forEach((id) => {
+    ALL_BUILTIN_BOOKS.forEach((id) => {
       const checked = active.includes(id);
       const cb = document.querySelector(`[data-focus-book="${id}"]`);
       const card = document.querySelector(`[data-focus-book-card="${id}"]`);
@@ -4572,6 +4774,7 @@
         break;
       case "openActions": toggleFloatingPanel("actions", true); break;
       case "startQuiz": startWordQuiz(false); break;
+      case "startReviewMode": startReviewMode(); break;
       case "startQuizWeak": startWordQuiz(true); break;
       case "startQuizBook": startWordQuiz(value === "weak", false, value || "all"); break;
       case "openWeakWords": HostBridge.openSettings("words", "weak"); break;

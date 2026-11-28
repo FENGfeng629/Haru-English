@@ -224,6 +224,12 @@ def _default_ui_location(book_id: str, category: str, shortcut: str) -> str:
         if "Products" in category:
             return "Antigravity · 平台与产品入口"
         return "Antigravity · 主工作区"
+    if book_id == "dev_compiler":
+        if "IDE" in category:
+            return "VS Code / IDE · 编辑器快捷键"
+        if "报错" in category:
+            return "Compiler / Console · 报错诊断"
+        return "Compiler / Engineering · 编译与工程"
     return ""
 
 
@@ -253,7 +259,7 @@ def _pack_rows(
         idx = len(out) + 1
         sc_fmt = _format_shortcut_spaces(shortcut)
         cat_clean = clean_str(category)
-        is_soft = book_id in ("blender", "antigravity")
+        is_soft = book_id in ("blender", "antigravity") or (book_id == "dev_compiler" and bool(sc_fmt))
         out.append(
             {
                 "id": f"{prefix}_{idx:04d}",
@@ -676,6 +682,147 @@ ANTIGRAVITY_ROWS: list[tuple[str, str, str, str, str, str, str, str]] = [
 ]
 
 
+# Programming, Compiler Errors & IDE Shortcuts (120+ entries)
+DEV_COMPILER_ROWS: list[tuple[str, str, str, str, str, str, str, str]] = [
+    # --- 1. 编译器与运行时常见报错英文 ---
+    ("Syntax Error", "ˈsɪntæks ˈerər", "n.", "语法错误（代码不符合语言词法或语法规则，无法解析）", "报错 · 编译错误", "", "SyntaxError: Unexpected token '}' at line 42, column 5.", "语法错误：第 42 行第 5 列出现意外的符号 '}'。"),
+    ("Undefined Reference", "ˌʌndɪˈfaɪnd ˈrefrəns", "n.", "未定义引用（链接阶段找不到函数或全局变量的实体实现）", "报错 · 链接错误", "", "ld: undefined reference to `ComputeHash(char const*)'.", "链接器错误：找不到函数 ComputeHash 的定义实现。"),
+    ("Memory Leak", "ˈmeməri liːk", "n.", "内存泄漏（堆内存分配后未释放且失去引用，导致占用持续增长）", "报错 · 运行时", "", "AddressSanitizer: detected memory leaks of 4096 bytes in 2 allocations.", "内存检测器：检测到 2 次分配共泄漏 4096 字节内存。"),
+    ("Segmentation Fault", "ˌseɡmenˈteɪʃn fɔːlt", "n.", "段错误 / 非法内存访问（程序读写了未分配或受保护的内存地址）", "报错 · 运行时", "", "Segmentation fault (core dumped) at address 0x00000000.", "段错误（核心已转储）：在空地址 0x00000000 处发生非法访存。"),
+    ("Circular Dependency", "ˈsɜːrkjələr dɪˈpendənsi", "n.", "循环依赖（模块 A 依赖 B 且 B 又反过来依赖 A，导致初始化异常）", "报错 · 工程构建", "", "Warning: Circular dependency detected: auth.ts -> user.ts -> auth.ts.", "警告：检测到循环依赖 auth.ts -> user.ts -> auth.ts。"),
+    ("Deprecated", "ˈdeprəkeɪtɪd", "adj.", "已弃用（接口仍可用但将在未来版本移除，建议迁移至新替代方案）", "报错 · 编译警告", "", "DeprecationWarning: Buffer() is deprecated due to security issues. Use Buffer.from() instead.", "弃用警告：Buffer() 因安全问题已弃用，请改用 Buffer.from()。"),
+    ("Null Pointer Exception", "nʌl ˈpɔɪntər ɪkˈsepʃn", "n.", "空指针异常（试图在 null / None 对象上调用方法或读取属性）", "报错 · 运行时", "", "NullReferenceException: Object reference not set to an instance of an object.", "空引用异常：未将对象引用设置到对象的实例。"),
+    ("Stack Overflow", "stæk ˈoʊvərfloʊ", "n.", "栈溢出（无限递归或过深函数调用耗尽调用栈空间）", "报错 · 运行时", "", "RangeError: Maximum call stack size exceeded in recursiveParse().", "范围错误：recursiveParse() 中超出最大调用栈深度。"),
+    ("Race Condition", "reɪs kənˈdɪʃn", "n.", "竞态条件（多线程并发读写共享状态且缺少同步锁导致的随机错误）", "报错 · 并发缺陷", "", "WARNING: DATA RACE — Write at 0x00c00012a080 by goroutine 7.", "警告：检测到数据竞争——协程 7 在无锁状态下写入共享地址。"),
+    ("Deadlock", "ˈdedlɒk", "n.", "死锁（多个线程互相持有对方等待的锁，导致程序永久挂起）", "报错 · 并发缺陷", "", "fatal error: all goroutines are asleep - deadlock!", "致命错误：所有协程均处于阻塞等待状态——发生死锁！"),
+    ("Type Mismatch", "taɪp ˌmɪsˈmætʃ", "n.", "类型不匹配（传入值或返回值的静态类型与声明不符）", "报错 · 编译错误", "", "TS2322: Type 'string' is not assignable to type 'number'.", "类型错误：不能将 string 类型赋值给 number 类型。"),
+    ("Unresolved Symbol", "ˌʌnrɪˈzɒlvd ˈsɪmbl", "n.", "无法解析的符号（找不到变量、类型或导入成员的声明）", "报错 · 编译错误", "", "error CS0103: The name 'dockScale' does not exist in the current context.", "编译错误：当前上下文中不存在名称 'dockScale'。"),
+    ("Index Out of Bounds", "ˈɪndeks aʊt əv baʊndz", "n.", "数组下标越界（访问索引小于 0 或大于等于集合长度）", "报错 · 运行时", "", "IndexOutOfRangeException: Index 10 was outside the bounds of the array.", "索引越界异常：索引 10 超出了数组有效范围。"),
+    ("Out of Memory", "aʊt əv ˈmeməri", "n.", "内存耗尽 / OOM（进程申请内存超出系统或容器上限被终止）", "报错 · 运行时", "", "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory.", "致命错误：达到堆内存上限分配失败——JS 堆内存耗尽。"),
+    ("Buffer Overflow", "ˈbʌfər ˈoʊvərfloʊ", "n.", "缓冲区溢出（写入数据长度超出目标缓冲区容量，覆盖相邻内存）", "报错 · 安全缺陷", "", "ERROR: AddressSanitizer: heap-buffer-overflow on address 0x602000000014.", "错误：堆缓冲区溢出，写入越过已分配内存边界。"),
+    ("Unhandled Rejection", "ʌnˈhændld rɪˈdʒekʃn", "n.", "未捕获的异步拒绝（Promise 失败但缺少 .catch 或 try/catch 处理）", "报错 · 运行时", "", "UnhandledPromiseRejection: Failed to fetch /api/config (HTTP 502).", "未捕获的 Promise 拒绝：请求 /api/config 返回 502。"),
+    ("Permission Denied", "pərˈmɪʃn dɪˈnaɪd", "n.", "权限被拒绝（当前用户缺少读写文件、端口或执行脚本的权限）", "报错 · 系统错误", "", "EACCES: permission denied, open '/etc/hosts'.", "权限拒绝：无权打开或写入受保护的系统文件。"),
+    ("Connection Refused", "kəˈnekʃn rɪˈfjuːzd", "n.", "连接被拒绝（目标主机端口未监听或被防火墙拦截）", "报错 · 网络错误", "", "Error: connect ECONNREFUSED 127.0.0.1:5432.", "网络错误：连接本地 5432 数据库端口被拒绝。"),
+    ("Timeout Exceeded", "ˈtaɪmaʊt ɪkˈsiːdɪd", "n.", "超时错误（网络请求或锁等待超出预设时间阈值）", "报错 · 网络错误", "", "TimeoutError: Operation timed out after 15000ms waiting for response.", "超时错误：等待响应超过 15000 毫秒后操作超时。"),
+    ("CORS Error", "kɔːrz ˈerər", "n.", "跨域资源共享拦截（浏览器阻止前端访问未授权跨域的后端接口）", "报错 · Web 调试", "", "Access to fetch at 'https://api.example.com' has been blocked by CORS policy.", "跨域拦截：前端请求被浏览器的 CORS 安全策略阻止。"),
+    ("Assertion Failed", "əˈsɜːrʃn feɪld", "n.", "断言失败（测试或调试期间实际结果违背了预期不变量）", "报错 · 测试调试", "", "AssertionError: Expected 200 OK, but received 401 Unauthorized.", "断言失败：期望返回 200 OK，但实际收到 401 未授权。"),
+    ("Duplicate Symbol", "ˈdjuːplɪkeɪt ˈsɪmbl", "n.", "重复定义符号（同一作用域或链接单元中定义了两个同名标识符）", "报错 · 链接错误", "", "error LNK2005: _init_logger already defined in utils.obj.", "链接错误：符号 _init_logger 已在 utils.obj 中重复定义。"),
+    ("Module Not Found", "ˈmɒdjuːl nɒt faʊnd", "n.", "找不到模块（缺少依赖包或导入路径拼写错误）", "报错 · 工程构建", "", "ModuleNotFoundError: No module named 'requests'.", "模块未找到错误：当前环境中未安装名为 requests 的模块。"),
+    ("Invalid Cast", "ɪnˈvælɪd kæst", "n.", "无效类型转换（运行时强制将对象转为不兼容的目标类型）", "报错 · 运行时", "", "InvalidCastException: Unable to cast object of type 'Int32' to type 'String'.", "无效转换异常：无法将 Int32 类型对象强转为 String。"),
+    ("Version Conflict", "ˈvɜːrʒn ˈkɒnflɪkt", "n.", "依赖版本冲突（两个库要求同一子依赖的不兼容主版本号）", "报错 · 工程构建", "", "ERESOLVE unable to resolve dependency tree: peer react@'^18.0.0' conflict.", "依赖解析失败：peer dependency 要求不兼容的 React 版本。"),
+    ("Unreachable Code", "ʌnˈriːtʃəbl koʊd", "n.", "不可达代码（位于 return/break/throw 之后永远不会执行的语句）", "报错 · 编译警告", "", "warning CS0162: Unreachable code detected after return statement.", "编译警告：在 return 语句之后检测到永远不会执行的代码。"),
+    ("Illegal State", "ɪˈliːɡl steɪt", "n.", "非法状态异常（在对象尚未初始化或已关闭时调用了不合法操作）", "报错 · 运行时", "", "IllegalStateException: Cannot send message on a closed WebSocket.", "非法状态异常：无法在已关闭的 WebSocket 上发送消息。"),
+    ("Broken Pipe", "ˈbroʊkən paɪp", "n.", "管道破裂（向已被对端关闭的套接字或标准输出继续写入数据）", "报错 · 系统错误", "", "BrokenPipeError: [Errno 32] Broken pipe while streaming response.", "管道破裂错误：流式写入响应时客户端已提前断开连接。"),
+    ("Division by Zero", "dɪˈvɪʒn baɪ ˈzɪroʊ", "n.", "除零错误（整数除法运算中分母为零引发的算术异常）", "报错 · 运行时", "", "ZeroDivisionError: integer division or modulo by zero.", "除零错误：整数除法或取模运算中除数为零。"),
+    ("File Locked / In Use", "faɪl lɒkt", "n.", "文件被占用锁定（另一进程正持有文件句柄导致无法覆盖或删除）", "报错 · 系统错误", "", "IOException: The process cannot access the file because it is being used by another process.", "IO 异常：文件正由另一进程使用，当前进程无法访问。"),
+    ("Merge Conflict", "mɜːrdʒ ˈkɒnflɪkt", "n.", "合并冲突（Git 合并分支时同一代码行存在互不相容的修改）", "报错 · Git 协作", "", "CONFLICT (content): Merge conflict in Services/StorageService.cs.", "内容冲突：StorageService.cs 中存在需要手动解决的合并冲突。"),
+    ("Detached HEAD", "dɪˈtætʃt hed", "n.", "游离 HEAD 状态（Git 当前检出在具体提交哈希上，未指向任何分支）", "报错 · Git 协作", "", "Note: switching to '4954fa9'. You are in 'detached HEAD' state.", "提示：已切换至提交 4954fa9，当前处于游离 HEAD 状态。"),
+
+    # --- 2. 核心编译阶段与工程高频词 ---
+    ("Lexer", "ˈleksər", "n.", "词法分析器（将源代码字符流切分为 Token 序列的编译前端阶段）", "编译 · 编译原理", "", "The lexer scans raw source text into identifiers, keywords, and literals.", "词法分析器将原始源码扫描切分为标识符、关键字与字面量。"),
+    ("Parser", "ˈpɑːrsər", "n.", "语法分析器（按文法规则将 Token 流构造成抽象语法树）", "编译 · 编译原理", "", "The parser validates token grammar and constructs an AST.", "语法分析器校验词元语法规则并构建抽象语法树。"),
+    ("AST", "eɪ es tiː", "n.", "抽象语法树（Abstract Syntax Tree，表示代码逻辑结构的树状模型）", "编译 · 编译原理", "", "Linters and formatters walk the AST to inspect and rewrite code safely.", "代码检查与格式化工具通过遍历抽象语法树安全地分析与改写代码。"),
+    ("IR", "aɪ ɑːr", "n.", "中间表示（Intermediate Representation，独立于源语言与目标架构的优化层）", "编译 · 编译原理", "", "LLVM lowers C++ and Rust into a unified IR for cross-platform optimization.", "LLVM 将 C++ 与 Rust 降至统一中间表示以执行跨平台优化。"),
+    ("Linker", "ˈlɪŋkər", "n.", "链接器（合并多个目标文件与静态库、解析外部符号并生成可执行文件）", "编译 · 编译原理", "", "The linker resolves external symbols across object files into one binary.", "链接器跨多个目标文件解析外部符号并组装成最终二进制程序。"),
+    ("Runtime", "ˈrʌntaɪm", "n.", "运行时环境（程序执行期间提供内存管理、调度与标准库支持的底层环境）", "编译 · 编译原理", "", "The .NET runtime handles JIT compilation and garbage collection automatically.", ".NET 运行时自动负责即时编译与垃圾回收。"),
+    ("Bytecode", "ˈbaɪtkoʊd", "n.", "字节码（介于源码与机器码之间、由虚拟机解释或 JIT 执行的紧凑指令）", "编译 · 编译原理", "", "Python compiles .py modules into bytecode cached under __pycache__.", "Python 会将源码编译为字节码并缓存在 __pycache__ 目录中。"),
+    ("JIT Compilation", "dʒɪt ˌkɒmpɪˈleɪʃn", "n.", "即时编译（程序运行期间动态将热点字节码编译为原生机器码加速）", "编译 · 编译原理", "", "JIT compilation optimizes hot loops dynamically based on runtime types.", "即时编译会根据运行时类型信息动态优化热点循环。"),
+    ("AOT Compilation", "eɪ oʊ tiː ˌkɒmpɪˈleɪʃn", "n.", "提前编译（构建期直接编译为原生机器码，缩短启动时间与体积）", "编译 · 编译原理", "", "Native AOT compilation produces a fast-starting standalone executable.", "原生提前编译能产出启动极快的独立可执行文件。"),
+    ("Garbage Collection", "ˈɡɑːrbɪdʒ kəˈlekʃn", "n.", "垃圾回收 / GC（自动追踪并回收不再被引用的堆内存对象）", "编译 · 内存管理", "", "Avoid allocating large temporary buffers in hot loops to reduce GC pauses.", "避免在高频循环中分配大块临时缓冲区以减少垃圾回收停顿。"),
+    ("Serialize", "ˈsɪriəlaɪz", "v.", "序列化（将内存数据结构转换为 JSON / Protobuf 等可传输或存储格式）", "工程 · 数据处理", "", "Serialize the settings object to camelCase JSON before writing to disk.", "写入磁盘前将配置对象序列化为小驼峰格式的 JSON。"),
+    ("Deserialize", "diːˈsɪriəlaɪz", "v.", "反序列化（将 JSON / 二进制字节流还原为强类型内存对象）", "工程 · 数据处理", "", "Deserialize the API payload and validate required fields defensively.", "反序列化接口报文并对必填字段进行防御性校验。"),
+    ("Idempotent", "aɪˈdempətənt", "adj.", "幂等的（同一请求执行一次与重复执行多次产生的系统结果完全一致）", "工程 · 架构设计", "", "Design payment webhooks to be idempotent so retries never double-charge.", "将支付回调设计为幂等接口，确保重试不会造成重复扣款。"),
+    ("Immutable", "ɪˈmjuːtəbl", "adj.", "不可变的（对象创建后内部状态不可修改，天然适合并发安全共享）", "工程 · 架构设计", "", "Freeze immutable configuration snapshots to prevent accidental mutation.", "冻结不可变配置快照以防止多线程意外修改状态。"),
+    ("Concurrency", "kənˈkʌrənsi", "n.", "并发（单核或多核上交替推进多个任务逻辑，强调任务调度结构）", "工程 · 并发系统", "", "Async/await simplifies I/O concurrency without blocking the UI thread.", "Async/await 能在不阻塞界面线程的前提下简化 I/O 并发。"),
+    ("Parallelism", "ˈpærəlelɪzəm", "n.", "并行（在多核 CPU/GPU 上同一时刻物理同时执行多个计算任务）", "工程 · 并发系统", "", "Use data parallelism across CPU cores to speed up batch image encoding.", "利用多核 CPU 的数据并行显著加速批量图像编码。"),
+    ("Asynchronous", "eɪˈsɪŋkrənəs", "adj.", "异步的（发起耗时 I/O 操作后立即返回，完成时通过回调或 Promise 通知）", "工程 · 并发系统", "", "Run TTS synthesis asynchronously so desktop animations never stutter.", "异步执行语音合成，确保桌面动画流畅不掉帧。"),
+    ("Closure", "ˈkloʊʒər", "n.", "闭包（函数捕获并记住其定义时所处词法作用域变量的特性）", "工程 · 语言特性", "", "Watch out for stale variables captured inside event-handler closures.", "留意事件回调闭包中可能捕获到过期变量的问题。"),
+    ("Polymorphism", "ˌpɒliˈmɔːrfɪzəm", "n.", "多态（不同子类通过统一接口表现出各自特定的行为实现）", "工程 · 面向对象", "", "Polymorphism lets the TTS engine swap Edge and OpenAI providers seamlessly.", "多态让语音引擎可以无缝切换 Edge 与 OpenAI 合成服务。"),
+    ("Dependency Injection", "dɪˈpendənsi ɪnˈdʒekʃn", "n.", "依赖注入 / DI（由外部容器传入依赖对象，降低模块耦合便于单测）", "工程 · 架构设计", "", "Pass StorageService via dependency injection to make unit testing easy.", "通过依赖注入传入存储服务，让单元测试更易于替换模拟对象。"),
+    ("Recursion", "rɪˈkɜːrʒn", "n.", "递归（函数直接或间接调用自身以拆分树形或分治问题）", "工程 · 算法基础", "", "Always define a clear base case to prevent infinite recursion.", "编写递归函数时务必定义清晰的终止基准条件。"),
+    ("Memoization", "ˌmemoʊaɪˈzeɪʃn", "n.", "记忆化缓存（按入参缓存纯函数计算结果，避免重复昂贵运算）", "工程 · 性能优化", "", "Memoization cuts repeated search filtering time on large lists.", "记忆化缓存能大幅削减大列表重复筛选的计算开销。"),
+    ("Refactor", "ˌriːˈfæktər", "v.", "重构（在不改变外部可观测行为的前提下改善代码内部结构）", "工程 · 开发实践", "", "Refactor the monolithic handler into focused, testable helper methods.", "将臃肿的处理函数重构为职责单一、易于测试的辅助方法。"),
+    ("Transpile", "trænsˈpaɪl", "v.", "转译（将一种高级语言源码转换为另一种目标高级语言，如 TS -> JS）", "编译 · 前端工程", "", "TypeScript transpiles typed modules down to standard ES2022 JavaScript.", "TypeScript 会将带类型的模块转译为标准 ES2022 JavaScript。"),
+    ("Tree Shaking", "triː ˈʃeɪkɪŋ", "n.", "摇树优化（打包器静态分析并剔除未被引用的死代码以减小体积）", "编译 · 前端工程", "", "Use ES module named exports so bundlers can apply tree shaking effectively.", "使用 ES 模块具名导出，让打包工具能够高效执行摇树优化。"),
+    ("Source Map", "sɔːrs mæp", "n.", "源码映射（将压缩或编译后的代码行号映射回原始源码便于断点调试）", "编译 · 调试工具", "", "Enable source maps in staging builds to inspect readable stack traces.", "在预发布构建中开启源码映射，以便查看清晰可读的报错堆栈。"),
+    ("Hot Reload", "hɒt ˌriːˈloʊd", "n.", "热重载（代码保存后无需重启整个应用即可即时更新运行状态）", "工程 · 开发体验", "", "Hot reload preserves UI state while tweaking stylesheets in real time.", "实时调整样式表时，热重载能保留当前界面状态无需重启。"),
+    ("Linting", "ˈlɪntɪŋ", "n.", "静态代码检查（编译前自动扫描潜在缺陷、未使用变量与风格问题）", "工程 · 质量保障", "", "Run linting in pre-commit hooks to catch typos before code review.", "在提交前钩子中运行静态代码检查，提前拦截低级拼写与缺陷。"),
+    ("Toolchain", "ˈtuːltʃeɪn", "n.", "工具链（串联编译器、链接器、打包器与调试器的完整构建工具集）", "编译 · 工程构建", "", "Pin the SDK version in global.json to keep the build toolchain consistent.", "在 global.json 中锁定 SDK 版本以保证团队构建工具链一致。"),
+    ("Deterministic", "dɪˌtɜːrmɪˈnɪstɪk", "adj.", "确定性的（相同输入在任何机器上重复构建或运行都产出完全一致结果）", "工程 · 工程构建", "", "Lockfiles guarantee deterministic dependency installs across CI runners.", "锁文件保证在所有 CI 节点上执行确定性的依赖安装。"),
+    ("Mutex", "ˈmjuːteks", "n.", "互斥锁（保证同一时刻只有一个线程进入临界区访问共享资源）", "工程 · 并发系统", "", "Guard shared cache mutations with a lightweight mutex lock.", "使用轻量级互斥锁保护共享缓存的并发写入操作。"),
+    ("Semaphore", "ˈseməfɔːr", "n.", "信号量（限制同时访问有限资源的最大并发线程或请求数量）", "工程 · 并发系统", "", "Use SemaphoreSlim(3) to cap concurrent TTS prewarm requests at three.", "使用 SemaphoreSlim(3) 将并发语音预热请求数上限控制在 3 个。"),
+    ("Event Loop", "ɪˈvent luːp", "n.", "事件循环（单线程非阻塞运行时持续分发异步回调与微任务的调度机制）", "工程 · 运行时", "", "Avoid heavy synchronous JSON parsing that stalls the browser event loop.", "避免繁重的同步 JSON 解析，防止阻塞浏览器事件循环。"),
+    ("Call Stack", "kɔːl stæk", "n.", "调用栈（记录当前活跃函数调用层级、局部变量与返回地址的栈结构）", "编译 · 调试工具", "", "Inspect the Call Stack pane in the debugger to see who triggered the error.", "在调试器的调用栈面板中查看是谁触发了本次报错。"),
+    ("Heap Allocation", "hiːp ˌæləˈkeɪʃn", "n.", "堆内存分配（在动态内存区域按需申请生命周期跨函数的对象空间）", "编译 · 内存管理", "", "Reuse buffers with ArrayPool to minimize frequent heap allocations.", "通过对象池复用缓冲区，尽量减少高频堆内存分配。"),
+    ("Profiling", "ˈproʊfaɪlɪŋ", "n.", "性能剖析（采样统计 CPU 耗时、内存热点与渲染帧率以定位瓶颈）", "工程 · 性能优化", "", "Run CPU profiling before optimizing to target the actual bottleneck.", "优化前先做 CPU 性能剖析，精准定位真正的耗时瓶颈。"),
+    ("Regression", "rɪˈɡreʃn", "n.", "回归缺陷（新增改动意外破坏了原本正常工作的功能）", "工程 · 质量保障", "", "Add a regression test whenever you fix a production edge-case bug.", "每次修复线上边界缺陷后都补充一条回归测试防止复发。"),
+    ("Mocking", "ˈmɒkɪŋ", "n.", "模拟打桩（单元测试中用可控假对象替代真实网络或数据库依赖）", "工程 · 测试调试", "", "Use mocking to test API retry logic without hitting live servers.", "使用模拟打桩测试接口重试逻辑，无需真正请求线上服务器。"),
+    ("Debounce", "diːˈbaʊns", "v./n.", "防抖（连续高频触发事件时延迟至停止输入后再执行一次回调）", "工程 · 前端性能", "", "Debounce the vocabulary search input by 140ms to keep typing silky smooth.", "为词库搜索框加上 140ms 防抖，保证大词量输入丝滑不卡顿。"),
+    ("Throttle", "ˈθrɒtl", "v./n.", "节流（限制高频事件在固定时间间隔内最多执行一次，如滚动/鼠标追踪）", "工程 · 前端性能", "", "Throttle global cursor hit-testing to 60Hz to keep CPU usage near zero.", "将全局鼠标命中检测节流在 60Hz 以保持极低 CPU 占用。"),
+    ("Schema Migration", "ˈskiːmə maɪˈɡreɪʃn", "n.", "数据结构迁移（版本升级时自动将旧版数据库或本地配置平滑升级到新结构）", "工程 · 数据处理", "", "Bump vocabVersion to trigger an automatic schema migration on startup.", "递增 vocabVersion 版本号以在启动时自动触发数据结构迁移。"),
+    ("Fallback", "ˈfɔːlbæk", "n.", "降级回退方案（主服务不可用时自动切换至备用引擎以保证可用性）", "工程 · 架构设计", "", "If Edge Neural TTS fails offline, fall back gracefully to local WebSpeech.", "若离线时 Edge 神经语音不可用，自动优雅降级至系统本地语音。"),
+    ("Environment Variable", "ɪnˈvaɪrənmənt ˈveriəbl", "n.", "环境变量（在进程外部注入密钥、路径或运行模式的键值对配置）", "工程 · 运维部署", "", "Never hardcode API tokens; load them from environment variables instead.", "切勿硬编码 API 密钥，应改由环境变量或本地安全配置读取。"),
+    ("Exit Code", "ˈeksɪt koʊd", "n.", "退出状态码（进程结束时返回给操作系统的整数，0 代表成功，非 0 代表异常）", "编译 · 终端调试", "", "The CI step failed because dotnet test returned exit code 1.", "CI 流水线失败，因为 dotnet test 返回了非零退出码 1。"),
+    ("Stdout / Stderr", "stændərd aʊt", "n.", "标准输出 / 标准错误流（命令行程序输出正常结果与报错信息的两个独立流）", "编译 · 终端调试", "", "Redirect stderr to build.log so compiler errors are preserved.", "将标准错误流重定向至 build.log 以便完整保存编译报错。"),
+    ("Hotfix", "ˈhɒtfɪks", "n.", "紧急热修复（针对线上严重故障快速发布的小范围定向修复补丁）", "工程 · Git 协作", "", "Ship a hotfix commit immediately to resolve the startup crash.", "立即发布紧急热修复提交以解决启动崩溃问题。"),
+    ("Pull Request", "pʊl rɪˈkwest", "n.", "拉取请求 / PR（提交分支代码供团队评审、跑通检查后合并主干的流程）", "工程 · Git 协作", "", "Open a Pull Request with screenshots and passing unit tests attached.", "发起拉取请求并附上效果截图与通过的单元测试记录。"),
+    ("Cherry-Pick", "ˈtʃeri pɪk", "v.", "择优拣选提交（将另一分支中的单个指定提交精准复制到当前分支）", "工程 · Git 协作", "", "Cherry-pick the bugfix commit onto the release/v1.2 branch.", "将该缺陷修复提交单独拣选合并到 release/v1.2 发布分支。"),
+
+    # --- 3. 高频 IDE / 编辑器按钮与快捷键 (VS Code / 通用 IDE 键位) ---
+    ("Command Palette", "", "", "命令面板（快速搜索并执行编辑器全部命令、构建与插件操作）", "IDE · 导航与命令", "Ctrl + Shift + P", "Press Ctrl + Shift + P to open the Command Palette and reload the window.", "按 Ctrl + Shift + P 打开命令面板执行任意 IDE 命令。"),
+    ("Go to Definition", "", "", "转到定义（直接跳转到函数、类或变量声明源码处）", "IDE · 代码导航", "F12", "Put the cursor on SaveSettings and press F12 to Go to Definition.", "光标放在 SaveSettings 上按 F12 直接跳转到定义处。"),
+    ("Peek Definition", "", "", "速览定义（在当前编辑器内嵌浮窗查看定义而不离开当前行）", "IDE · 代码导航", "Alt + F12", "Press Alt + F12 to Peek Definition without losing your scroll position.", "按 Alt + F12 在当前位置原地速览定义，不打断阅读上下文。"),
+    ("Find All References", "", "", "查找所有引用（列出该符号在整个项目中的全部调用位置）", "IDE · 代码导航", "Shift + F12", "Press Shift + F12 before deleting a helper to check all references.", "删除辅助函数前按 Shift + F12 查找全项目全部引用处。"),
+    ("Rename Symbol", "", "", "重命名符号（跨文件安全同步重命名变量、函数或类名）", "IDE · 智能重构", "F2", "Press F2 to Rename Symbol safely across all referencing files.", "按 F2 跨文件安全重构并同步重命名符号。"),
+    ("Quick Fix", "", "", "快速修复 / 代码操作（自动导入缺失命名空间、提取函数或修复警告）", "IDE · 智能重构", "Ctrl + .", "Press Ctrl + . on a squiggly underline to apply a Quick Fix.", "光标停在波浪线报错处按 Ctrl + . 唤出快速修复菜单。"),
+    ("Format Document", "", "", "格式化文档（一键按项目规范整理缩进、空格与换行）", "IDE · 代码编辑", "Shift + Alt + F", "Press Shift + Alt + F to Format Document cleanly before committing.", "提交前按 Shift + Alt + F 一键规范格式化当前文档。"),
+    ("Toggle Line Comment", "", "", "切换行注释（快速为当前行或选中多行添加/取消注释）", "IDE · 代码编辑", "Ctrl + /", "Press Ctrl + / to Toggle Line Comment on the selected block.", "选中代码块按 Ctrl + / 快速添加或取消行注释。"),
+    ("Toggle Block Comment", "", "", "切换块注释（用 /* ... */ 包裹或取消包裹当前选区）", "IDE · 代码编辑", "Shift + Alt + A", "Press Shift + Alt + A to wrap an inline expression in a block comment.", "按 Shift + Alt + A 为行内选区加上或取消块级注释。"),
+    ("Toggle Breakpoint", "", "", "切换断点（在当前行打上或取消调试器暂停断点）", "IDE · 调试控制", "F9", "Press F9 on the error branch to set a debugger breakpoint.", "在报错分支行按 F9 设下调试断点。"),
+    ("Start Debugging", "", "", "开始调试（编译并附加调试器运行当前项目）", "IDE · 调试控制", "F5", "Press F5 to Start Debugging and inspect live variable values.", "按 F5 启动调试器并实时检查变量状态。"),
+    ("Step Over", "", "", "单步跳过（执行当前语句并停在下一行，不进入子函数内部）", "IDE · 调试控制", "F10", "Press F10 to Step Over helper calls while tracing main logic.", "按 F10 单步跳过子函数调用，专注追踪主逻辑。"),
+    ("Step Into", "", "", "单步步入（进入当前行调用的子函数内部逐行排查）", "IDE · 调试控制", "F11", "Press F11 to Step Into SynthesizeAsync and inspect its cache lookup.", "按 F11 步入函数内部逐行排查执行细节。"),
+    ("Step Out", "", "", "单步跳出（执行完当前函数剩余代码并返回上层调用者）", "IDE · 调试控制", "Shift + F11", "Press Shift + F11 to Step Out once you finish inspecting a helper.", "检查完子函数后按 Shift + F11 快速跳回上层调用处。"),
+    ("Find in Files", "", "", "全局跨文件搜索（在整个工作区中按关键字或正则检索文本）", "IDE · 搜索替换", "Ctrl + Shift + F", "Press Ctrl + Shift + F to search every occurrence of CurrentVocabVersion.", "按 Ctrl + Shift + F 在整个项目中全局检索关键字。"),
+    ("Replace in Files", "", "", "全局跨文件替换（在多个文件中批量预览并替换匹配文本）", "IDE · 搜索替换", "Ctrl + Shift + H", "Use Ctrl + Shift + H to replace legacy book IDs across the repo.", "按 Ctrl + Shift + H 跨文件批量替换匹配文本。"),
+    ("Go to File", "", "", "快速打开文件（模糊匹配文件名秒跳任意项目源码）", "IDE · 导航与命令", "Ctrl + P", "Press Ctrl + P and type app.js to jump straight to the file.", "按 Ctrl + P 输入文件名秒速打开目标文件。"),
+    ("Go to Symbol", "", "", "转到文件中的符号（快速浏览并跳转至当前文件的函数/类定义）", "IDE · 代码导航", "Ctrl + Shift + O", "Press Ctrl + Shift + O to jump between methods in MainWindow.xaml.cs.", "按 Ctrl + Shift + O 快速在当前文件的函数与类间跳转。"),
+    ("Go to Line", "", "", "跳转到指定行号（对照报错堆栈行号精准定位）", "IDE · 代码导航", "Ctrl + G", "Press Ctrl + G and enter 690 to jump directly to the error line.", "按 Ctrl + G 输入行号直接定位到报错堆栈所在行。"),
+    ("Toggle Terminal", "", "", "开关集成终端（展开或收起底部命令行终端面板）", "IDE · 面板与视图", "Ctrl + `", "Press Ctrl + ` to open the integrated terminal and run dotnet build.", "按 Ctrl + ` 快速展开底部集成终端执行构建命令。"),
+    ("Split Editor", "", "", "拆分编辑器（将窗口并排分屏，同时对照两份代码文件）", "IDE · 面板与视图", "Ctrl + \\", "Press Ctrl + \\ to Split Editor and compare HTML beside JS.", "按 Ctrl + \\ 并排拆分编辑器，左右对照编辑多文件。"),
+    ("Add Next Occurrence", "", "", "选中下一个相同匹配（多光标同时批量编辑相同变量名）", "IDE · 多光标编辑", "Ctrl + D", "Select a token and tap Ctrl + D to multi-edit matching occurrences.", "选中变量后连按 Ctrl + D 逐个添加多光标同步修改。"),
+    ("Multi-Cursor", "", "", "添加多光标（按住 Alt 点击任意位置同时在多行键入代码）", "IDE · 多光标编辑", "Alt + Click", "Hold Alt + Click to place cursors on multiple JSON fields at once.", "按住 Alt 点击多处即可放置多个光标同时输入。"),
+    ("Move Line Up / Down", "", "", "上下移动当前行（无需剪切粘贴直接调整语句顺序）", "IDE · 代码编辑", "Alt + Up/Down", "Press Alt + Up/Down to reorder statements without copy-pasting.", "按 Alt + 方向上下键直接调整代码行顺序。"),
+    ("Duplicate Line", "", "", "向下复制当前行（快速克隆一行代码或配置项）", "IDE · 代码编辑", "Shift + Alt + Down", "Press Shift + Alt + Down to duplicate the current JSON entry.", "按 Shift + Alt + Down 快速向下复制当前行。"),
+    ("Fold / Unfold Region", "", "", "折叠 / 展开代码块（收起长函数体以便总览文件结构）", "IDE · 代码编辑", "Ctrl + Shift + [", "Press Ctrl + Shift + [ to fold a large method body cleanly.", "按 Ctrl + Shift + [ 折叠当前代码块便于浏览大纲。"),
+    ("Trigger Suggest", "", "", "手动触发智能补全（立即弹出成员属性与方法提示列表）", "IDE · 智能提示", "Ctrl + Space", "Press Ctrl + Space to Trigger Suggest for available API fields.", "按 Ctrl + Space 主动唤出智能代码补全提示列表。"),
+    ("Parameter Hints", "", "", "参数签名提示（查看当前调用函数的重载参数类型与说明）", "IDE · 智能提示", "Ctrl + Shift + Space", "Press Ctrl + Shift + Space inside parentheses to inspect parameter hints.", "在函数括号内按 Ctrl + Shift + Space 查看参数类型签名。"),
+    ("Problems Panel", "", "", "问题面板（集中列出所有编译报错、类型警告与 Lint 提示）", "IDE · 面板与视图", "Ctrl + Shift + M", "Open the Problems Panel with Ctrl + Shift + M to jump through errors.", "按 Ctrl + Shift + M 打开问题面板逐条定位编译报错与警告。"),
+    ("Source Control", "", "", "源代码管理面板（查看 Git 变更文件、暂存差异与提交记录）", "IDE · 面板与视图", "Ctrl + Shift + G", "Press Ctrl + Shift + G to review staged diffs in Source Control.", "按 Ctrl + Shift + G 切换至 Git 源代码管理视图。"),
+    ("Organize Imports", "", "", "整理导入语句（自动删除未使用的 import 并按规范排序）", "IDE · 智能重构", "Shift + Alt + O", "Press Shift + Alt + O to remove unused imports automatically.", "按 Shift + Alt + O 自动清理无用的导入声明并排序。"),
+    ("Navigate Back", "", "", "后退到上一光标位置（跳转定义后一键回到原阅读处）", "IDE · 代码导航", "Alt + Left", "Press Alt + Left to Navigate Back right after inspecting a definition.", "按 F12 看完定义后，按 Alt + Left 一键退回原阅读位置。"),
+    ("Toggle Sidebar", "", "", "开关主侧边栏（隐藏或展开左侧文件资源管理器以扩大代码视野）", "IDE · 面板与视图", "Ctrl + B", "Press Ctrl + B to hide the sidebar when reading wide diffs.", "查看宽行差异对比时按 Ctrl + B 隐藏左侧边栏。"),
+    ("Zen Mode", "", "", "禅模式（全屏隐藏干扰面板，专注沉浸式写代码）", "IDE · 面板与视图", "Ctrl + K Z", "Press Ctrl + K Z to enter distraction-free Zen Mode.", "按 Ctrl + K Z 进入无干扰全屏沉浸式编码模式。"),
+    ("Delete Line", "", "", "整行删除（无需选中整行直接快速删去光标所在行）", "IDE · 代码编辑", "Ctrl + Shift + K", "Press Ctrl + Shift + K to delete an obsolete debug log line instantly.", "按 Ctrl + Shift + K 一键删除光标所在的整行调试日志。"),
+]
+
+
+def build_dev_compiler() -> dict[str, Any]:
+    entries = _pack_rows("dev_compiler", "dev", DEV_COMPILER_ROWS)
+    print(f"[DevCompiler] Built {len(entries)} entries")
+    return {
+        "id": "dev_compiler",
+        "bookId": "dev_compiler",
+        "name": "编程与编译",
+        "description": f"编程与编译英语高频词库（共 {len(entries)} 词），聚焦编译器/运行时报错英文、编译原理与工程核心术语及高频 IDE 快捷键。",
+        "level": "DEV",
+        "category": "dev_compiler",
+        "builtIn": True,
+        "enabled": True,
+        "entries": entries,
+    }
+
+
 def build_blender() -> dict[str, Any]:
     entries = _pack_rows("blender", "blender", BLENDER_ROWS)
     print(f"[Blender] Built {len(entries)} entries")
@@ -730,14 +877,17 @@ def main() -> int:
     toefl = build_toefl()
     blender = build_blender()
     antigravity = build_antigravity()
+    dev_compiler = build_dev_compiler()
 
     write_json(OUT_DIR / "toefl.json", toefl)
     write_json(OUT_DIR / "blender.json", blender)
     write_json(OUT_DIR / "antigravity.json", antigravity)
+    write_json(OUT_DIR / "dev_compiler.json", dev_compiler)
 
     print(
         f"\nDone! Total entries: TOEFL={len(toefl['entries'])}, "
-        f"Blender={len(blender['entries'])}, Antigravity={len(antigravity['entries'])}"
+        f"Blender={len(blender['entries'])}, Antigravity={len(antigravity['entries'])}, "
+        f"DevCompiler={len(dev_compiler['entries'])}"
     )
     return 0
 

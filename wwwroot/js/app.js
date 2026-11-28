@@ -2619,8 +2619,10 @@
     const isSoftwareBook = cur.bookId === "blender" || cur.bookId === "antigravity" || (cur.bookId === "dev_compiler" && !!cur.shortcut);
     const bookName = getBookDisplayName(cur.bookId);
 
-    if (titleEl) titleEl.textContent = "Haru 每日喂词";
-    if (prog) prog.textContent = `第 ${q.batchNum || 1} 组 · ${q.index + 1} / ${totalInBatch} · ${bookName}`;
+    if (titleEl) titleEl.textContent = q.isRestudy ? "重新浏览本组词" : "Haru 每日喂词";
+    if (prog) prog.textContent = q.isRestudy
+      ? `重看复习 · ${q.index + 1} / ${totalInBatch} · ${bookName}`
+      : `第 ${q.batchNum || 1} 组 · ${q.index + 1} / ${totalInBatch} · ${bookName}`;
 
     const metaBadges = [];
     if (!isSoftwareBook && cur.pos) metaBadges.push(`<span class="quiz-cat-badge">${escapeHtml(cur.pos)}</span>`);
@@ -2676,19 +2678,25 @@
         const nowIso = new Date().toISOString();
         const quizItems = q.teachQueue.map((item) => {
           const prev = getWordProgress(item.word);
+          const keepStreak = q.isRestudy ? (prev?.streak || 0) : 0;
+          const keepStatus = q.isRestudy && prev?.status && prev.status !== "unseen" ? prev.status : "learning";
           upsertWordProgress(item, {
-            status: "learning",
+            status: keepStatus,
             seenCount: (prev?.seenCount || 0) + 1,
-            streak: 0,
+            streak: keepStreak,
             nextReviewAt: Date.now(),
             lastReviewedAt: nowIso
           });
-          return { ...item, streak: 0, status: "learning" };
+          return { ...item, streak: keepStreak, status: keepStatus };
         });
         saveVocabProgress();
         maybeCelebrateDailyGoal();
         const { byBook } = buildAllEntriesIndex();
-        launchQuizSession(quizItems, q.bookId, byBook.all, false);
+        launchQuizSession(quizItems, q.bookId, byBook.all, {
+          isAntiForget: !!q.resumeAntiForget,
+          isWarmup: !!q.resumeWarmup,
+          isDedicatedReview: !!q.resumeDedicatedReview
+        });
       }
     };
 
@@ -2909,8 +2917,38 @@
       <div class="quiz-word-box">${promptHtml}</div>
       <div class="quiz-options"></div>
       <div id="quiz-wrong-box" class="quiz-wrong-feedback hidden"></div>
+      <div class="teach-skip-row" style="margin-top:6px;">
+        <button type="button" id="btn-quiz-restudy" class="teach-btn-skip-one">← 记不清？退出重看本组再考</button>
+      </div>
     `;
     body.scrollTop = 0;
+
+    document.getElementById("btn-quiz-restudy")?.addEventListener("click", () => {
+      markUserInteraction();
+      VoiceEngine.stopSpeaking();
+      const seen = new Set();
+      const batch = [];
+      (q.questions || []).forEach((item) => {
+        const k = (item.word || "").toLowerCase();
+        if (!k || seen.has(k)) return;
+        seen.add(k);
+        batch.push(item);
+      });
+      if (!batch.length) return;
+      state.quiz = {
+        mode: "teach",
+        isRestudy: true,
+        resumeAntiForget: !!q.isAntiForget,
+        resumeWarmup: !!q.isWarmup,
+        resumeDedicatedReview: !!q.isDedicatedReview,
+        bookId: q.bookId,
+        batchNum: 1,
+        teachQueue: batch,
+        index: 0
+      };
+      HaruPet.performAction("friendly");
+      renderTeachCard();
+    });
 
     const sayBtn = document.getElementById("quiz-say-btn");
     if (sayBtn) sayBtn.onclick = () => VoiceEngine.speak(cur.word, state.settings.voice);

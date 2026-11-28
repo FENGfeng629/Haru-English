@@ -618,47 +618,27 @@
                   <option value="weak">仅个人生词本</option>
                 </select>
 
-                <div class="bento-sub-label">启用词库管理（关闭后自动从浮窗、词库栏与每日池隐藏）</div>
-                <div id="enabled-books-grid" class="enable-books-grid" role="group" aria-label="启用词库隔离">
+                <div class="bento-sub-label">启用词库管理（勾选即启用，多选自动均分占比，如勾 2 项各占 50%）</div>
+                <div id="enabled-books-grid" class="enable-books-grid" role="group" aria-label="启用词库隔离与配比">
                   <label class="enable-book-chip checked" data-enable-card="toefl">
                     <input type="checkbox" data-enable-book="toefl" checked />
-                    <span>托福 TOEFL</span>
+                    <span class="enable-book-name">托福 TOEFL</span>
+                    <span class="daily-book-pct" data-enable-pct="toefl">25%</span>
                   </label>
                   <label class="enable-book-chip checked" data-enable-card="blender">
                     <input type="checkbox" data-enable-book="blender" checked />
-                    <span>Blender 3D</span>
+                    <span class="enable-book-name">Blender 3D</span>
+                    <span class="daily-book-pct" data-enable-pct="blender">25%</span>
                   </label>
                   <label class="enable-book-chip checked" data-enable-card="antigravity">
                     <input type="checkbox" data-enable-book="antigravity" checked />
-                    <span>Antigravity</span>
+                    <span class="enable-book-name">Antigravity</span>
+                    <span class="daily-book-pct" data-enable-pct="antigravity">25%</span>
                   </label>
                   <label class="enable-book-chip checked" data-enable-card="dev_compiler">
                     <input type="checkbox" data-enable-book="dev_compiler" checked />
-                    <span>编程与编译</span>
-                  </label>
-                </div>
-
-                <div class="bento-sub-label">每日抽查模块配比（勾选多个模块即可自动混合均分占比，如勾 2 项各占 50%）</div>
-                <div id="daily-books-checklist" class="daily-books-checklist" role="group" aria-label="每日抽查模块勾选">
-                  <label class="daily-book-check" data-focus-book-card="toefl">
-                    <input type="checkbox" data-focus-book="toefl" checked />
-                    <span class="daily-book-check-name">托福 TOEFL</span>
-                    <span class="daily-book-pct" data-focus-pct="toefl">50%</span>
-                  </label>
-                  <label class="daily-book-check" data-focus-book-card="blender">
-                    <input type="checkbox" data-focus-book="blender" checked />
-                    <span class="daily-book-check-name">Blender 3D</span>
-                    <span class="daily-book-pct" data-focus-pct="blender">50%</span>
-                  </label>
-                  <label class="daily-book-check" data-focus-book-card="antigravity">
-                    <input type="checkbox" data-focus-book="antigravity" />
-                    <span class="daily-book-check-name">Antigravity</span>
-                    <span class="daily-book-pct" data-focus-pct="antigravity">0%</span>
-                  </label>
-                  <label class="daily-book-check" data-focus-book-card="dev_compiler">
-                    <input type="checkbox" data-focus-book="dev_compiler" />
-                    <span class="daily-book-check-name">编程与编译</span>
-                    <span class="daily-book-pct" data-focus-pct="dev_compiler">0%</span>
+                    <span class="enable-book-name">编程与编译</span>
+                    <span class="daily-book-pct" data-enable-pct="dev_compiler">25%</span>
                   </label>
                 </div>
 

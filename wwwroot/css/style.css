@@ -3759,6 +3759,19 @@ body[data-theme="dark"] .mini-idle-bubble {
   color: var(--text-main);
 }
 
+.enable-book-chip.checked .daily-book-pct {
+  background: var(--accent);
+  color: #FFFFFF;
+}
+
+.enable-book-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .enable-book-chip input[type="checkbox"] {
   width: 14px;
   height: 14px;

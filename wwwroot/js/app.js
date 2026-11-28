@@ -1909,14 +1909,7 @@
   }
 
   function getActiveFocusBooks() {
-    const enabled = getEnabledBooks();
-    const enabledSet = new Set(enabled);
-    const raw = state.settings?.dailyFocusBooks;
-    if (Array.isArray(raw) && raw.length > 0) {
-      const cleaned = raw.filter((id) => enabledSet.has(id));
-      if (cleaned.length > 0) return [...new Set(cleaned)];
-    }
-    return enabled.slice(0, Math.min(2, enabled.length));
+    return getEnabledBooks();
   }
 
   function computeDailyTargets(goal, _ratio, activeBook) {
@@ -4457,11 +4450,15 @@
           return;
         }
         state.settings.enabledBooks = enabled;
-        // Keep dailyFocusBooks & quizPackId strictly within enabledBooks
-        const validFocus = (state.settings.dailyFocusBooks || []).filter((id) => enabled.includes(id));
-        state.settings.dailyFocusBooks = validFocus.length > 0 ? validFocus : [enabled[0]];
-        if (ALL_BUILTIN_BOOKS.includes(state.settings.quizPackId) && !enabled.includes(state.settings.quizPackId)) {
-          state.settings.quizPackId = enabled.length === 1 ? enabled[0] : "all";
+        state.settings.dailyFocusBooks = [...enabled];
+        const nextPack = enabled.length === 1 ? enabled[0] : "all";
+        state.settings.quizPackId = nextPack;
+        const quizPackSel = document.getElementById("set-quiz-pack");
+        if (quizPackSel) {
+          const displayVal = nextPack === "all" ? enabled[0] : nextPack;
+          if (Array.from(quizPackSel.options).some((o) => o.value === displayVal)) {
+            quizPackSel.value = displayVal;
+          }
         }
         if (ALL_BUILTIN_BOOKS.includes(vocabView.book) && !enabled.includes(vocabView.book)) {
           vocabView.book = "daily";
@@ -4519,10 +4516,7 @@
       const next = e.target.value || "toefl";
       state.settings.quizPackId = next;
       if (ALL_BUILTIN_BOOKS.includes(next)) {
-        const enabled = getEnabledBooks();
-        if (!enabled.includes(next)) {
-          state.settings.enabledBooks = [...enabled, next];
-        }
+        state.settings.enabledBooks = [next];
         state.settings.dailyFocusBooks = [next];
         applyEnabledBooksVisibility();
         renderDailyFocusBooksUI();
@@ -4843,7 +4837,7 @@
 
   function renderDailyFocusBooksUI() {
     applyEnabledBooksVisibility();
-    const active = getActiveFocusBooks();
+    const active = getEnabledBooks();
     const count = active.length || 1;
     const basePct = Math.floor(100 / count);
     let rem = 100 - basePct * count;
@@ -4854,11 +4848,7 @@
     });
     ALL_BUILTIN_BOOKS.forEach((id) => {
       const checked = active.includes(id);
-      const cb = document.querySelector(`[data-focus-book="${id}"]`);
-      const card = document.querySelector(`[data-focus-book-card="${id}"]`);
-      const pctEl = document.querySelector(`[data-focus-pct="${id}"]`);
-      if (cb) cb.checked = checked;
-      if (card) card.classList.toggle("checked", checked);
+      const pctEl = document.querySelector(`[data-enable-pct="${id}"]`);
       if (pctEl) pctEl.textContent = checked ? `${pctMap[id]}%` : "0%";
     });
   }

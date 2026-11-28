@@ -609,13 +609,14 @@
                 </div>
               </div>
               <div class="bento-body">
-                <div class="bento-sub-label">每日新词目标（每 5 词为一组，先浏览后立刻开考）</div>
-                <div class="seg-pills seg-4" role="group" aria-label="每日新词目标">
-                  <button type="button" class="seg-pill" data-daily-goal="5">5 词</button>
-                  <button type="button" class="seg-pill active" data-daily-goal="10">10 词</button>
-                  <button type="button" class="seg-pill" data-daily-goal="15">15 词</button>
-                  <button type="button" class="seg-pill" data-daily-goal="20">20 词</button>
-                </div>
+                <div class="bento-sub-label">当前学习词库范围</div>
+                <select id="set-quiz-pack" class="s-select">
+                  <option value="toefl">托福 TOEFL</option>
+                  <option value="blender">Blender 3D</option>
+                  <option value="antigravity">Antigravity</option>
+                  <option value="dev_compiler">编程与编译</option>
+                  <option value="weak">仅个人生词本</option>
+                </select>
 
                 <div class="bento-sub-label">启用词库管理（关闭后自动从浮窗、词库栏与每日池隐藏）</div>
                 <div id="enabled-books-grid" class="enable-books-grid" role="group" aria-label="启用词库隔离">
@@ -637,7 +638,7 @@
                   </label>
                 </div>
 
-                <div class="bento-sub-label">每日抽查模块配比（勾选模块自动均分占比，如勾 2 项各占 50%）</div>
+                <div class="bento-sub-label">每日抽查模块配比（勾选多个模块即可自动混合均分占比，如勾 2 项各占 50%）</div>
                 <div id="daily-books-checklist" class="daily-books-checklist" role="group" aria-label="每日抽查模块勾选">
                   <label class="daily-book-check" data-focus-book-card="toefl">
                     <input type="checkbox" data-focus-book="toefl" checked />
@@ -661,6 +662,14 @@
                   </label>
                 </div>
 
+                <div class="bento-sub-label">每日新词目标（每 5 词为一组，先浏览后立刻开考）</div>
+                <div class="seg-pills seg-4" role="group" aria-label="每日新词目标">
+                  <button type="button" class="seg-pill" data-daily-goal="5">5 词</button>
+                  <button type="button" class="seg-pill active" data-daily-goal="10">10 词</button>
+                  <button type="button" class="seg-pill" data-daily-goal="15">15 词</button>
+                  <button type="button" class="seg-pill" data-daily-goal="20">20 词</button>
+                </div>
+
                 <div class="bento-sub-label">待机喂词 / 抽查频率</div>
                 <div class="seg-pills seg-4" role="group" aria-label="待机抽查频率">
                   <button type="button" class="seg-pill" data-activity="off">关闭</button>
@@ -669,12 +678,6 @@
                   <button type="button" class="seg-pill" data-activity="lively">5分</button>
                 </div>
                 <div id="hint-activity-level" class="bento-hint-strip">先投喂今日新词认词，10分钟后间隔抽考，绝不盲考未学词。</div>
-
-                <div class="bento-sub-label">当前抽查词库范围</div>
-                <select id="set-quiz-pack" class="s-select">
-                  <option value="all">全部已启用词库</option>
-                  <option value="weak">仅不熟练生词</option>
-                </select>
               </div>
             </section>
           </div>

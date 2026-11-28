@@ -4490,7 +4490,12 @@
         const nextPack = selected.length === 1 ? selected[0] : "all";
         state.settings.quizPackId = nextPack;
         const quizPackSel = document.getElementById("set-quiz-pack");
-        if (quizPackSel) quizPackSel.value = nextPack;
+        if (quizPackSel) {
+          const displayVal = nextPack === "all" ? selected[0] : nextPack;
+          if (Array.from(quizPackSel.options).some((o) => o.value === displayVal)) {
+            quizPackSel.value = displayVal;
+          }
+        }
         renderDailyFocusBooksUI();
         rebuildUntaughtDailyQueue();
         renderWeakWordsList();
@@ -4511,10 +4516,15 @@
     });
 
     document.getElementById("set-quiz-pack")?.addEventListener("change", (e) => {
-      const next = e.target.value || "all";
+      const next = e.target.value || "toefl";
       state.settings.quizPackId = next;
-      if (["toefl", "blender", "antigravity"].includes(next)) {
+      if (ALL_BUILTIN_BOOKS.includes(next)) {
+        const enabled = getEnabledBooks();
+        if (!enabled.includes(next)) {
+          state.settings.enabledBooks = [...enabled, next];
+        }
         state.settings.dailyFocusBooks = [next];
+        applyEnabledBooksVisibility();
         renderDailyFocusBooksUI();
       }
       rebuildUntaughtDailyQueue();
@@ -4799,19 +4809,25 @@
     const quizPackSel = document.getElementById("set-quiz-pack");
     if (!quizPackSel) return;
     const s = state.settings || {};
-    const enabledSet = new Set(getEnabledBooks());
-    quizPackSel.innerHTML = `<option value="all">混合抽查（按已勾选模块均分）</option><option value="weak">仅个人生词本</option>`;
+    quizPackSel.innerHTML = "";
     (state.knowledgePacks || []).forEach((pack) => {
-      if (ALL_BUILTIN_BOOKS.includes(pack.id) && !enabledSet.has(pack.id)) return;
       const opt = document.createElement("option");
       opt.value = pack.id;
       opt.textContent = `${pack.name}（${(pack.entries || []).length} 词）`;
       quizPackSel.appendChild(opt);
     });
-    const desiredPack = s.quizPackId || "all";
+    const weakOpt = document.createElement("option");
+    weakOpt.value = "weak";
+    weakOpt.textContent = "仅个人生词本";
+    quizPackSel.appendChild(weakOpt);
+
+    const activeFocus = getActiveFocusBooks();
+    const desiredPack = (s.quizPackId && s.quizPackId !== "all")
+      ? s.quizPackId
+      : (activeFocus[0] || "toefl");
     quizPackSel.value = Array.from(quizPackSel.options).some((o) => o.value === desiredPack)
       ? desiredPack
-      : "all";
+      : (quizPackSel.options[0]?.value || "toefl");
   }
 
   function updateSttProviderUI() {

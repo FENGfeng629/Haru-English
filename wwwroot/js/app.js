@@ -37,8 +37,10 @@
     winBounds: { x: 0, y: 0, w: window.innerWidth || 1920, h: window.innerHeight || 1032 },
     hostWinBounds: { x: 0, y: 0, w: window.innerWidth || 1920, h: window.innerHeight || 1032 },
     ctxDeskPos: null,
-    chatMode: "chat", // chat | talk | translate
+    chatMode: "chat", // chat | translate
     chatHistory: [],
+    pendingImage: null, // { dataUrl, name }
+    voiceCall: { active: false, muted: false, startedAt: 0, timerId: null, busy: false },
     activePanel: null, // chat | actions | quiz | null
     activeModal: null, // legacy unused on Pet window; Settings runs in dedicated SettingsWindow
     lastInteractionTime: Date.now(),
@@ -1144,19 +1146,19 @@
   }
 
   function setChatMode(mode) {
-    state.chatMode = mode;
+    if (state.voiceCall?.active) exitVoiceCall();
+    state.chatMode = mode === "translate" ? "translate" : "chat";
     document.querySelectorAll("[data-chat-mode]").forEach((b) => {
       b.classList.toggle("active", b.dataset.chatMode === state.chatMode);
     });
-    document.getElementById("talk-stage")?.classList.toggle("hidden", state.chatMode !== "talk");
+    const isTranslate = state.chatMode === "translate";
+    document.getElementById("chat-img-btn")?.classList.toggle("hidden", isTranslate);
+    if (isTranslate) clearPendingChatImage();
     const input = document.getElementById("chat-input");
     if (input) {
-      input.placeholder =
-        state.chatMode === "translate"
-          ? "粘贴或输入英文，自动翻译并提取生词..."
-          : state.chatMode === "talk"
-          ? "当前为语音模式，也可直接打字发送..."
-          : `用英语和 Haru 聊天 (${state.settings.englishLevel})...`;
+      input.placeholder = isTranslate
+        ? "输入英文或中文，立即翻译并提取重点词..."
+        : `用英语和 Haru 聊天 (${state.settings.englishLevel})，支持 Ctrl+V 粘贴图片...`;
     }
     syncDockActiveButtons();
   }
@@ -1221,6 +1223,9 @@
   }
 
   function closeFloatingPanels(skipSync = false) {
+    if (state.voiceCall?.active) {
+      exitVoiceCall();
+    }
     if (VoiceEngine.isListening()) {
       VoiceEngine.stopListening();
     }
@@ -1314,15 +1319,56 @@
     });
   }
 
-  // ==================== ENGLISH CHAT, TRANSLATE & VOICE STT ====================
+  // ==================== ENGLISH CHAT (VISION), TRANSLATE & VOICE CALL ====================
+  function clearPendingChatImage() {
+    state.pendingImage = null;
+    const prev = document.getElementById("chat-image-preview");
+    const thumb = document.getElementById("chat-image-thumb");
+    const fileInput = document.getElementById("chat-img-input");
+    if (prev) prev.classList.add("hidden");
+    if (thumb) thumb.src = "";
+    if (fileInput) fileInput.value = "";
+  }
+
+  function attachChatImageFile(file) {
+    if (!file || !file.type.startsWith("image/")) return;
+    if (state.chatMode !== "chat") setChatMode("chat");
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1280;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          const scale = maxDim / Math.max(w, h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.86);
+        state.pendingImage = { dataUrl, name: file.name || "screenshot.jpg" };
+        const thumb = document.getElementById("chat-image-thumb");
+        const nameEl = document.getElementById("chat-image-name");
+        if (thumb) thumb.src = dataUrl;
+        if (nameEl) nameEl.textContent = state.pendingImage.name;
+        document.getElementById("chat-image-preview")?.classList.remove("hidden");
+        document.getElementById("chat-input")?.focus();
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   function setupChatPanel() {
     document.querySelectorAll("[data-chat-mode]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const nextMode = btn.dataset.chatMode;
-        if (nextMode === state.chatMode) return;
-        if (nextMode !== "talk" && VoiceEngine.isListening()) {
-          VoiceEngine.stopListening();
-        }
+        if (nextMode === state.chatMode && !state.voiceCall.active) return;
+        if (VoiceEngine.isListening()) VoiceEngine.stopListening();
         setChatMode(nextMode);
       });
     });
@@ -1335,12 +1381,50 @@
       }
     });
 
-    document.getElementById("chat-send-btn").addEventListener("click", sendChatOrTranslate);
-    document.getElementById("chat-mic-btn").addEventListener("click", toggleVoiceInput);
-    document.getElementById("talk-big-mic-btn").addEventListener("click", toggleVoiceInput);
-    document.getElementById("stt-stop-btn").addEventListener("click", () => VoiceEngine.stopListening());
-    document.getElementById("chat-clear-btn").addEventListener("click", () => {
+    // Support Ctrl+V pasting screenshots / images directly into Chat
+    input.addEventListener("paste", (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const it of items) {
+        if (it.type && it.type.startsWith("image/")) {
+          const file = it.getAsFile();
+          if (file) {
+            e.preventDefault();
+            attachChatImageFile(file);
+            return;
+          }
+        }
+      }
+    });
+
+    // Support drag-and-drop image onto Chat panel
+    const chatPanel = document.getElementById("chat-panel");
+    chatPanel?.addEventListener("dragover", (e) => { e.preventDefault(); });
+    chatPanel?.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer?.files?.[0];
+      if (file && file.type.startsWith("image/")) attachChatImageFile(file);
+    });
+
+    document.getElementById("chat-img-btn")?.addEventListener("click", () => {
+      document.getElementById("chat-img-input")?.click();
+    });
+    document.getElementById("chat-img-input")?.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) attachChatImageFile(file);
+    });
+    document.getElementById("chat-image-clear")?.addEventListener("click", clearPendingChatImage);
+
+    document.getElementById("chat-send-btn")?.addEventListener("click", sendChatOrTranslate);
+    document.getElementById("chat-mic-btn")?.addEventListener("click", toggleVoiceInput);
+    document.getElementById("chat-call-btn")?.addEventListener("click", enterVoiceCall);
+    document.getElementById("btn-call-hangup")?.addEventListener("click", exitVoiceCall);
+    document.getElementById("btn-call-mute")?.addEventListener("click", toggleCallMute);
+    document.getElementById("btn-call-push")?.addEventListener("click", handleCallPushButton);
+    document.getElementById("stt-stop-btn")?.addEventListener("click", () => VoiceEngine.stopListening());
+    document.getElementById("chat-clear-btn")?.addEventListener("click", () => {
       state.chatHistory = [];
+      clearPendingChatImage();
       document.getElementById("chat-messages").innerHTML = "";
       addWelcomeChatMessage();
     });
@@ -1348,8 +1432,8 @@
 
   function addWelcomeChatMessage() {
     appendAssistantBubble({
-      replyEn: `Hi! I'm Haru, your ${state.settings.englishLevel} English companion. Speak or type to chat, or switch to Translate mode anytime!`,
-      replyZh: "嗨！我是你的英语桌宠 Haru。可以直接打字或点麦克风语音转文字对话，切换到 Translate 模式还能随时翻译英文并提取生词哦！",
+      replyEn: `Hi! I'm Haru, your ${state.settings.englishLevel} English companion. Type, paste an image, or start a voice call anytime!`,
+      replyZh: "嗨！我是你的英语桌宠 Haru。Chat 模式支持打字与上传/粘贴图片识图对话，点击右下角「通话」可开启实时语音电话，切换到 Translate 专注精准翻译！",
       spoken: false
     });
   }
@@ -1357,11 +1441,13 @@
   async function sendChatOrTranslate() {
     const input = document.getElementById("chat-input");
     const text = input.value.trim();
-    if (!text) return;
+    const attachedImg = state.chatMode === "chat" ? state.pendingImage : null;
+    if (!text && !attachedImg) return;
 
     markUserInteraction();
     input.value = "";
-    appendUserBubble(text);
+    clearPendingChatImage();
+    appendUserBubble(text || "（已发送图片）", attachedImg?.dataUrl || "");
 
     const thinkingEl = appendThinkingBubble();
 
@@ -1386,11 +1472,12 @@
       recordActiveStudySeconds(30);
       const res = await HostBridge.rpc("aiChat", {
         message: text,
+        imageDataUrl: attachedImg?.dataUrl || "",
         history: state.chatHistory
       });
       thinkingEl.remove();
 
-      state.chatHistory.push({ role: "user", content: text });
+      state.chatHistory.push({ role: "user", content: text || "[Image]" });
       if (res.replyEn) {
         state.chatHistory.push({ role: "assistant", content: res.replyEn });
       }
@@ -1408,11 +1495,22 @@
     }
   }
 
-  function appendUserBubble(text) {
+  function appendUserBubble(text, imageDataUrl = "") {
     const container = document.getElementById("chat-messages");
     const div = document.createElement("div");
     div.className = "chat-msg user";
-    div.textContent = text;
+    if (imageDataUrl) {
+      const img = document.createElement("img");
+      img.className = "chat-msg-img";
+      img.src = imageDataUrl;
+      img.alt = "已上传图片";
+      div.appendChild(img);
+    }
+    if (text) {
+      const span = document.createElement("div");
+      span.textContent = text;
+      div.appendChild(span);
+    }
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
   }
@@ -1510,11 +1608,159 @@
     }
   }
 
+  // ==================== HANDS-FREE AI VOICE CALL (语音电话模式) ====================
+  function setCallVisualState(mode, statusText, enCaption, zhCaption) {
+    const orb = document.getElementById("call-orb");
+    const stEl = document.getElementById("call-status-text");
+    const enEl = document.getElementById("call-live-en");
+    const zhEl = document.getElementById("call-live-zh");
+    const pushLbl = document.getElementById("call-push-label");
+    if (orb) orb.className = `call-orb ${mode}`;
+    if (stEl && statusText) stEl.textContent = statusText;
+    if (enEl && enCaption !== undefined) enEl.textContent = enCaption;
+    if (zhEl && zhCaption !== undefined) zhEl.textContent = zhCaption;
+    if (pushLbl) pushLbl.textContent = mode === "listening" ? "说完发送" : "开始说话";
+  }
+
+  function enterVoiceCall() {
+    if (state.voiceCall.active) return;
+    if (VoiceEngine.isListening()) VoiceEngine.stopListening();
+    VoiceEngine.stopSpeaking();
+
+    state.voiceCall = { active: true, muted: false, startedAt: Date.now(), timerId: null, busy: false };
+    document.getElementById("chat-messages")?.classList.add("hidden");
+    document.getElementById("chat-composer-wrap")?.classList.add("hidden");
+    document.getElementById("stt-status-bar")?.classList.add("hidden");
+    document.getElementById("voice-call-stage")?.classList.remove("hidden");
+    document.getElementById("btn-call-mute")?.classList.remove("active");
+    const muteLbl = document.getElementById("call-mute-label");
+    if (muteLbl) muteLbl.textContent = "静音";
+
+    const timerEl = document.getElementById("call-timer");
+    if (timerEl) timerEl.textContent = "00:00";
+    state.voiceCall.timerId = setInterval(() => {
+      if (!state.voiceCall.active) return;
+      const sec = Math.floor((Date.now() - state.voiceCall.startedAt) / 1000);
+      const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+      const ss = String(sec % 60).padStart(2, "0");
+      if (timerEl) timerEl.textContent = `${mm}:${ss}`;
+    }, 1000);
+
+    HaruPet.performAction("happy");
+    setCallVisualState("listening", "语音电话已接通", "正在聆听，请直接说英语...", "说完自动发送，或点击「说完发送」");
+    startCallListening();
+  }
+
+  function exitVoiceCall() {
+    if (!state.voiceCall.active) return;
+    state.voiceCall.active = false;
+    state.voiceCall.busy = false;
+    if (state.voiceCall.timerId) {
+      clearInterval(state.voiceCall.timerId);
+      state.voiceCall.timerId = null;
+    }
+    if (VoiceEngine.isListening()) VoiceEngine.stopListening();
+    VoiceEngine.stopSpeaking();
+    document.getElementById("voice-call-stage")?.classList.add("hidden");
+    document.getElementById("chat-messages")?.classList.remove("hidden");
+    document.getElementById("chat-composer-wrap")?.classList.remove("hidden");
+  }
+
+  function toggleCallMute() {
+    if (!state.voiceCall.active) return;
+    state.voiceCall.muted = !state.voiceCall.muted;
+    const btn = document.getElementById("btn-call-mute");
+    const lbl = document.getElementById("call-mute-label");
+    btn?.classList.toggle("active", state.voiceCall.muted);
+    if (lbl) lbl.textContent = state.voiceCall.muted ? "取消静音" : "静音";
+    if (state.voiceCall.muted) {
+      if (VoiceEngine.isListening()) VoiceEngine.stopListening();
+      setCallVisualState("muted", "已静音", "麦克风已静音", "点击「取消静音」继续通话");
+    } else {
+      startCallListening();
+    }
+  }
+
+  function handleCallPushButton() {
+    if (!state.voiceCall.active || state.voiceCall.busy) return;
+    if (state.voiceCall.muted) toggleCallMute();
+    else if (VoiceEngine.isListening()) VoiceEngine.stopListening();
+    else startCallListening();
+  }
+
+  function startCallListening() {
+    if (!state.voiceCall.active || state.voiceCall.muted || state.voiceCall.busy) return;
+    VoiceEngine.startListening(state.settings, {
+      onStart() {
+        if (!state.voiceCall.active) return;
+        setCallVisualState("listening", "正在聆听...", "请直接说英语...", "说完自动发送给 Haru 回复");
+      },
+      onStatus(msg) {
+        if (!state.voiceCall.active) return;
+        setCallVisualState("thinking", msg, "正在转写你的语音...", "");
+      },
+      onInterim(txt) {
+        if (!state.voiceCall.active) return;
+        setCallVisualState("listening", "正在聆听...", txt || "请直接说英语...", "识别中...");
+      },
+      onFinal(txt) {
+        if (!state.voiceCall.active) return;
+        const clean = (txt || "").trim();
+        if (clean) handleCallTurn(clean);
+        else if (!state.voiceCall.muted) setTimeout(startCallListening, 350);
+      },
+      onError(errMsg) {
+        if (!state.voiceCall.active) return;
+        setCallVisualState("muted", "麦克风提示", errMsg || "语音识别中断", "点击「开始说话」重试");
+      },
+      onEnd() {}
+    });
+  }
+
+  async function handleCallTurn(userText) {
+    if (!state.voiceCall.active) return;
+    state.voiceCall.busy = true;
+    markUserInteraction();
+    setCallVisualState("thinking", "Haru 思考中...", `"${userText}"`, "正在组织回复...");
+    appendUserBubble(userText);
+
+    state.stats.messagesSent++;
+    recordActiveStudySeconds(30);
+    const res = await HostBridge.rpc("aiChat", {
+      message: userText,
+      history: state.chatHistory
+    });
+    if (!state.voiceCall.active) return;
+
+    const replyEn = res.replyEn || "";
+    const replyZh = res.replyZh || "";
+    state.chatHistory.push({ role: "user", content: userText });
+    if (replyEn) state.chatHistory.push({ role: "assistant", content: replyEn });
+    if (state.chatHistory.length > 20) state.chatHistory = state.chatHistory.slice(-20);
+
+    HaruPet.performAction(res.emotion || "happy");
+    appendAssistantBubble({
+      replyEn,
+      replyZh,
+      correction: res.correction || "",
+      vocabulary: res.vocabulary || [],
+      speakText: replyEn,
+      spoken: false
+    });
+    saveStats();
+    updateChatHeaderBadges();
+
+    setCallVisualState("speaking", "Haru 正在说话...", replyEn.replace(/\*\*/g, ""), replyZh);
+    await VoiceEngine.speak(replyEn, state.settings.voice);
+    state.voiceCall.busy = false;
+
+    if (state.voiceCall.active && !state.voiceCall.muted) {
+      setTimeout(startCallListening, 300);
+    }
+  }
+
   function toggleVoiceInput() {
     const micBtn = document.getElementById("chat-mic-btn");
-    const bigMicBtn = document.getElementById("talk-big-mic-btn");
-    const bigMicLabel = document.getElementById("talk-mic-label");
-    const talkHint = document.getElementById("talk-hint");
     const bar = document.getElementById("stt-status-bar");
     const statusTxt = document.getElementById("stt-status-text");
     const input = document.getElementById("chat-input");
@@ -1524,30 +1770,14 @@
       return;
     }
 
-    if (talkHint) {
-      talkHint.className = "talk-hint";
-      talkHint.textContent = "正在启动麦克风语音识别...";
-    }
-    if (bigMicLabel) bigMicLabel.textContent = "正在连接麦克风...";
-
     VoiceEngine.startListening(state.settings, {
       onStart(msg) {
         micBtn?.classList.add("recording");
-        bigMicBtn?.classList.add("recording");
-        if (bigMicLabel) bigMicLabel.textContent = "正在聆听中... 点击停止并发送";
-        if (talkHint) {
-          talkHint.className = "talk-hint";
-          talkHint.textContent = msg;
-        }
         bar.classList.remove("hidden");
         statusTxt.textContent = msg;
       },
       onStatus(msg) {
         statusTxt.textContent = msg;
-        if (talkHint) {
-          talkHint.className = "talk-hint";
-          talkHint.textContent = msg;
-        }
       },
       onInterim(txt) {
         input.value = txt;
@@ -1557,16 +1787,10 @@
         if (txt.trim()) sendChatOrTranslate();
       },
       onError(errMsg) {
-        if (talkHint) {
-          talkHint.className = "talk-hint err";
-          talkHint.textContent = errMsg;
-        }
         showBubble("Voice input needs a quick check!", errMsg, { badge: "STT Tip" });
       },
       onEnd() {
         micBtn?.classList.remove("recording");
-        bigMicBtn?.classList.remove("recording");
-        if (bigMicLabel) bigMicLabel.textContent = "点击开始语音对话";
         bar.classList.add("hidden");
       }
     });
@@ -4768,9 +4992,9 @@
       case "openChat": toggleFloatingPanel("chat", true); break;
       case "openTalk":
         if (state.activeModal) closeModals(true);
-        setChatMode("talk");
+        setChatMode("chat");
         if (state.activePanel !== "chat") toggleFloatingPanel("chat", true);
-        if (!VoiceEngine.isListening()) toggleVoiceInput();
+        enterVoiceCall();
         break;
       case "openActions": toggleFloatingPanel("actions", true); break;
       case "startQuiz": startWordQuiz(false); break;

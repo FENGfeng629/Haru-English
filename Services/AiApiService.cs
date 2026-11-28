@@ -18,7 +18,8 @@ public class AiApiService
         List<ChatTurn> history,
         List<WeakWord> weakWords,
         string correctionStyle = "gentle",
-        List<string>? activeStudyWords = null)
+        List<string>? activeStudyWords = null,
+        string? imageDataUrl = null)
     {
         if (string.IsNullOrWhiteSpace(api.ApiKey) && !IsLocalEndpoint(api.BaseUrl))
         {
@@ -78,7 +79,26 @@ Target learner English level: CEFR {{englishLevel}}.
                 ["content"] = turn.Content
             });
         }
-        messages.Add(new JsonObject { ["role"] = "user", ["content"] = userMessage });
+        if (!string.IsNullOrWhiteSpace(imageDataUrl))
+        {
+            var promptText = string.IsNullOrWhiteSpace(userMessage)
+                ? "Please look at this image and describe or explain what you see in natural English suitable for my level."
+                : userMessage;
+            var contentArr = new JsonArray
+            {
+                new JsonObject { ["type"] = "text", ["text"] = promptText },
+                new JsonObject
+                {
+                    ["type"] = "image_url",
+                    ["image_url"] = new JsonObject { ["url"] = imageDataUrl }
+                }
+            };
+            messages.Add(new JsonObject { ["role"] = "user", ["content"] = contentArr });
+        }
+        else
+        {
+            messages.Add(new JsonObject { ["role"] = "user", ["content"] = userMessage });
+        }
 
         var payload = new JsonObject
         {

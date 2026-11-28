@@ -1703,6 +1703,7 @@ public partial class MainWindow : Window
             {
                 var settings = _storage.LoadSettings();
                 var userMsg = payload["message"]?.ToString() ?? "";
+                var imageDataUrl = payload["imageDataUrl"]?.ToString();
                 var history = payload["history"] != null
                     ? JsonSerializer.Deserialize<List<ChatTurn>>(payload["history"]!.ToJsonString(), StorageService.JsonOptions) ?? new()
                     : new List<ChatTurn>();
@@ -1719,7 +1720,7 @@ public partial class MainWindow : Window
                 var activeStudyWords = activePool.Count <= 3
                     ? activePool
                     : activePool.Take(10).OrderBy(_ => rng.Next()).Take(3).ToList();
-                return await _ai.ChatAsync(settings.Api, settings.EnglishLevel, userMsg, history, weak, settings.CorrectionStyle, activeStudyWords);
+                return await _ai.ChatAsync(settings.Api, settings.EnglishLevel, userMsg, history, weak, settings.CorrectionStyle, activeStudyWords, imageDataUrl);
             }
 
             case "aiTranslate":
